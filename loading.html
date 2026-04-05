@@ -1,0 +1,117 @@
+<div id="__app-loading__" class="app-loading">
+  <div class="app-loading-content">
+    <img src="/logo.svg" alt="logo" class="loading-logo" />
+    <div class="loading-text">网盘资源</div>
+  </div>
+</div>
+
+<script>
+  // 检测 dark 模式并应用到 loading
+  ;(function () {
+    // 从 localStorage 读取主题模式
+    const themeMode = localStorage.getItem('themeMode') || 'light'
+    const isDark = themeMode === 'dark'
+
+    // 如果 html 标签已经有 dark 类，也认为是 dark 模式
+    const htmlHasDark = document.documentElement.classList.contains('dark')
+
+    if (isDark || htmlHasDark) {
+      document.documentElement.classList.add('dark')
+      const loadingEl = document.getElementById('__app-loading__')
+      if (loadingEl) {
+        loadingEl.classList.add('dark-mode')
+      }
+    }
+  })()
+</script>
+
+<style>
+  .app-loading {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #fff;
+    z-index: 99999;
+    transition: background-color 0.3s ease;
+  }
+
+  .app-loading-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .loading-logo {
+    width: 120px;
+    height: 120px;
+    animation: logoSpin 2s ease-in-out infinite;
+  }
+
+  @media (max-width: 992px) {
+    .loading-logo {
+      width: 80px;
+      height: 80px;
+    }
+  }
+
+  @keyframes logoSpin {
+    0% {
+      transform: rotate(0deg) scale(1);
+    }
+    25% {
+      transform: rotate(90deg) scale(1.1);
+    }
+    50% {
+      transform: rotate(180deg) scale(1);
+    }
+    75% {
+      transform: rotate(270deg) scale(1.1);
+    }
+    100% {
+      transform: rotate(360deg) scale(1);
+    }
+  }
+
+  .loading-text {
+    color: #666;
+    font-size: 32px;
+    font-weight: 600;
+    transition: color 0.3s ease;
+    letter-spacing: 1px;
+  }
+
+  @media (max-width: 992px) {
+    .loading-text {
+      font-size: 24px;
+    }
+  }
+
+  /* Dark 模式样式 */
+  .app-loading.dark-mode {
+    background: #1d1e1f;
+  }
+
+  .app-loading.dark-mode .loading-text {
+    color: #a8abb2;
+  }
+
+  /* 或者使用 html.dark 选择器（如果 useDark 已经添加了 dark 类） */
+  html.dark .app-loading {
+    background: #1d1e1f;
+  }
+
+  html.dark .app-loading .loading-text {
+    color: #a8abb2;
+  }
+
+  /* 应用加载完成后隐藏 */
+  .app-loading.hidden {
+    display: none;
+  }
+</style>

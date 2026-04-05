@@ -1,0 +1,53 @@
+<template>
+  <el-container class="top-mode-container">
+    <el-header class="header">
+      <HeaderView />
+    </el-header>
+    <Transition name="fade-slide" mode="out-in">
+      <TabsView v-if="themeStore.showTabs" />
+    </Transition>
+    <el-scrollbar>
+      <el-main class="main">
+        <RouterView v-slot="{ Component, route }">
+          <Transition name="fade-slide" mode="out-in">
+            <component :is="Component" :key="route.path" />
+          </Transition>
+        </RouterView>
+      </el-main>
+    </el-scrollbar>
+  </el-container>
+</template>
+
+<script setup lang="ts">
+import HeaderView from '@/layouts/header.vue'
+import TabsView from '@/layouts/tabsView.vue'
+
+defineOptions({ name: 'TopMode' })
+
+const themeStore = useThemeStore()
+</script>
+
+<style scoped lang="scss">
+.top-mode-container {
+  width: 100%;
+  height: 100%;
+
+  .header {
+    height: 50px;
+    background: var(--el-bg-color);
+    border-bottom: 1px solid var(--el-border-color-lighter);
+    padding-right: 0.25rem;
+  }
+
+  .main {
+    background: var(--el-bg-color-page);
+    padding: 1rem;
+    position: relative;
+    overflow-y: auto;
+    overflow-x: hidden;
+    min-height: calc(100vh - 50px - 2.5rem);
+    display: flex;
+    flex-direction: column;
+  }
+}
+</style>

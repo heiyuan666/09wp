@@ -1,0 +1,87 @@
+name: DFAN-Admin Deploy to GitHub Pages
+
+on:
+  # 推送到 main 分支时触发
+  push:
+    branches:
+      - main
+  # 允许手动触发
+  workflow_dispatch:
+
+# 设置 GITHUB_TOKEN 的权限
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 允许一个并发部署
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  # 构建和部署任务
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      # 检出代码
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 设置 pnpm（需要在 Node.js 之前设置）
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          # 使用与本地一致的版本，避免 lockfile 版本不兼容
+          version: 10.4.1
+
+      # 设置 Node.js（配置使用 pnpm 缓存）
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          # 配置 Node.js 使用 pnpm 缓存，加速安装
+          cache: 'pnpm'
+
+      # 安装依赖
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # 生成自动导入类型文件（auto-imports.d.ts 和 components.d.ts）
+      # 这些文件由 unplugin-auto-import 和 unplugin-vue-components 自动生成
+      # 需要通过运行 vite 来触发插件生成这些类型定义文件
+      - name: Generate type definitions
+        run: pnpm exec vite build --mode development
+
+      # 类型检查
+      - name: Type check
+        run: pnpm type-check
+
+      # Lint 检查
+      - name: Lint
+        run: pnpm lint
+
+      # 构建项目
+      - name: Build
+        run: pnpm build-only
+        env:
+          NODE_ENV: production
+
+      # 配置 GitHub Pages
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      # 上传构建产物
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: './dist'
+
+      # 部署到 GitHub Pages
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
