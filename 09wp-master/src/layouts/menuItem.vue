@@ -1,0 +1,32 @@
+<template>
+  <el-sub-menu v-if="hasChildren" :index="item.id">
+    <template #title>
+      <el-icon v-if="item.icon">
+        <component :is="menuStore.iconComponents[item.icon]" />
+      </el-icon>
+      <span>{{ item.title }}</span>
+    </template>
+    <MenuItem v-for="child in item.children" :key="child.path" :item="child" />
+  </el-sub-menu>
+
+  <el-menu-item v-else :index="toMenuPath(item.path)">
+    <el-icon v-if="item.icon">
+      <component :is="menuStore.iconComponents[item.icon]" />
+    </el-icon>
+    <span>{{ item.title }}</span>
+  </el-menu-item>
+</template>
+
+<script setup lang="ts">
+const props = defineProps(['item'])
+
+const menuStore = useMenuStore()
+
+const hasChildren = computed(() => props.item.children?.length)
+const toMenuPath = (path: string) => {
+  if (!path) return ''
+  if (path.startsWith('/admin')) return path
+  if (path.startsWith('/')) return `/admin${path}`
+  return `/admin/${path}`
+}
+</script>

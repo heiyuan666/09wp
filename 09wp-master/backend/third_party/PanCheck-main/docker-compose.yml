@@ -1,0 +1,76 @@
+services:
+  pancheck:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pancheck
+    ports:
+      - "6080:6080"
+    environment:
+      - SERVER_PORT=6080 # 服务端口
+      - SERVER_MODE=release # 服务模式
+      - SERVER_CORS_ORIGINS=* # 跨域请求允许的源
+      - DATABASE_TYPE=mysql # 数据库类型
+      - DATABASE_HOST=db # 数据库地址
+      - DATABASE_PORT=3306 # 数据库端口
+      - DATABASE_USER=root # 数据库用户名
+      - DATABASE_PASSWORD=your_password # 数据库密码
+      - DATABASE_DATABASE=pancheck # 数据库名称
+      - DATABASE_CHARSET=utf8mb4 # 数据库字符集
+      - CHECKER_DEFAULT_CONCURRENCY=5 # 默认并发数
+      - CHECKER_TIMEOUT=30 # 超时时间（秒）
+      - REDIS_ENABLED=true # 是否启用Redis
+      - REDIS_HOST=redis # Redis地址
+      - REDIS_PORT=6379 # Redis端口
+      - REDIS_USERNAME= # Redis用户名
+      - REDIS_PASSWORD= # Redis密码
+      - REDIS_INVALID_TTL=168   # 失效链接缓存时间（小时）
+      - ADMIN_PASSWORD=admin123 # 后台管理密码
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+    depends_on:
+      - db
+      - redis
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:6080/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+  db:
+    image: mysql:8.0
+    container_name: pancheck-db
+    environment:
+      - MYSQL_ROOT_PASSWORD=your_password
+      - MYSQL_DATABASE=pancheck
+      - MYSQL_CHARACTER_SET_SERVER=utf8mb4
+      - MYSQL_COLLATION_SERVER=utf8mb4_unicode_ci
+    volumes:
+      - mysql_data:/var/lib/mysql
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p$$MYSQL_ROOT_PASSWORD"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  redis:
+    image: redis:latest
+    container_name: pancheck-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+volumes:
+  redis-data:
+  mysql_data:
+    driver: local
+
+

@@ -1,0 +1,380 @@
+<template>
+  <div class="tabs-container">
+    <HoverAnimateWrapper name="rubber">
+      <IconButton
+        icon="HOutline:ChevronLeftIcon"
+        size="1.75rem"
+        tooltip="向左滑动"
+        @click="slideLeft"
+      />
+    </HoverAnimateWrapper>
+
+    <div class="tabs-pages" ref="tabsPagesRef">
+      <div
+        class="tabs-page-item"
+        :class="{ active: tab.path === tabsStore.activePath }"
+        v-for="tab in tabsStore.tabs"
+        :key="tab.path"
+        :ref="(el) => setTabRef(el, tab.path)"
+        @click="navigation(tab.path)"
+      >
+        <HoverAnimateWrapper name="wobble" :duration="700">
+          <div style="display: flex; align-items: center; gap: 0.5rem">
+            <el-icon class="tabs-page-icon" size="18">
+              <component :is="menuStore.iconComponents[tab.icon as string]" />
+            </el-icon>
+            <div>{{ tab.title }}</div>
+            <el-icon v-if="tab.closable" class="close-icon" @click.stop="handleClose(tab)">
+              <component :is="menuStore.iconComponents['HSolid:XMarkIcon']" />
+            </el-icon>
+          </div>
+        </HoverAnimateWrapper>
+      </div>
+    </div>
+
+    <HoverAnimateWrapper name="rubber">
+      <IconButton
+        icon="HOutline:ChevronRightIcon"
+        size="1.75rem"
+        tooltip="向右滑动"
+        @click="slideRight"
+      />
+    </HoverAnimateWrapper>
+
+    <div class="tabs-dropdown">
+      <el-dropdown
+        trigger="click"
+        :show-arrow="false"
+        class="tabs-dropdown-wrapper"
+        popper-class="tabs-dropdown-popper"
+      >
+        <div class="tabs-dropdown-icon">
+          <HoverAnimateWrapper name="rubber">
+            <IconButton icon="HOutline:EllipsisHorizontalIcon" size="1.75rem" />
+          </HoverAnimateWrapper>
+        </div>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item
+              :icon="menuStore.iconComponents['HOutline:MinusCircleIcon']"
+              @click="tabsStore.closeOtherTabs(tabsStore.activePath)"
+            >
+              关闭其他标签页
+            </el-dropdown-item>
+            <el-dropdown-item
+              :icon="menuStore.iconComponents['HOutline:TrashIcon']"
+              @click="(tabsStore.closeAllTabs(), router.push(tabsStore.activePath))"
+            >
+              关闭所有标签页
+            </el-dropdown-item>
+            <el-dropdown-item
+              :icon="menuStore.iconComponents['HOutline:ChevronDoubleRightIcon']"
+              @click="tabsStore.closeRightTabs(tabsStore.activePath)"
+            >
+              关闭右侧标签页
+            </el-dropdown-item>
+            <el-dropdown-item
+              :icon="menuStore.iconComponents['HOutline:ChevronDoubleLeftIcon']"
+              @click="tabsStore.closeLeftTabs(tabsStore.activePath)"
+            >
+              关闭左侧标签页
+            </el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+defineOptions({ name: 'TabsView' })
+
+const router = useRouter()
+const menuStore = useMenuStore()
+const tabsStore = useTabsStore()
+const tabsPagesRef = useTemplateRef<HTMLDivElement>('tabsPagesRef')
+
+// 存储每个标签页的 DOM 引用
+const tabRefs = new Map<string, HTMLDivElement>()
+
+// 设置标签页引用
+const setTabRef = (el: Element | ComponentPublicInstance | null, path: string) => {
+  if (el && el instanceof HTMLElement) {
+    tabRefs.set(path, el as HTMLDivElement)
+  } else {
+    tabRefs.delete(path)
+  }
+}
+
+// 滚动到选中的标签页
+const scrollToActiveTab = () => {
+  nextTick(() => {
+    const activeTab = tabRefs.get(tabsStore.activePath)
+    const container = tabsPagesRef.value
+    if (!activeTab || !container) return
+
+    const containerRect = container.getBoundingClientRect()
+    const tabRect = activeTab.getBoundingClientRect()
+
+    // 检查标签页是否在可视区域内
+    const isVisible = tabRect.left >= containerRect.left && tabRect.right <= containerRect.right
+
+    if (!isVisible) {
+      // 如果标签页在左侧不可见
+      if (tabRect.left < containerRect.left) {
+        container.scrollTo({
+          left: container.scrollLeft + (tabRect.left - containerRect.left) - 10,
+          behavior: 'smooth',
+        })
+      }
+      // 如果标签页在右侧不可见
+      else if (tabRect.right > containerRect.right) {
+        container.scrollTo({
+          left: container.scrollLeft + (tabRect.right - containerRect.right) + 10,
+          behavior: 'smooth',
+        })
+      }
+    }
+  })
+}
+
+// 监听 activePath 变化，自动滚动到选中的标签页
+watch(
+  () => tabsStore.activePath,
+  () => {
+    scrollToActiveTab()
+  },
+  { immediate: true },
+)
+
+// 监听 tabs 数组变化，确保在标签页添加或删除后也能正确滚动
+watch(
+  () => tabsStore.tabs.length,
+  () => {
+    scrollToActiveTab()
+  },
+)
+
+// 导航到指定路径
+const navigation = (path: string) => {
+  router.push(path)
+  tabsStore.activePath = path
+  scrollToActiveTab()
+}
+
+// 关闭标签页
+const handleClose = (item: TabItem) => {
+  tabsStore.removeTab(item.path)
+  router.push(tabsStore.activePath)
+  scrollToActiveTab()
+}
+
+// 滚动步进值（容器宽度的80%）
+const SCROLL_STEP_RATIO = 0.8
+
+// 获取滚动容器信息
+const getScrollInfo = () => {
+  const container = tabsPagesRef.value
+  if (!container) return null
+
+  return {
+    container,
+    containerWidth: container.offsetWidth,
+    contentWidth: container.scrollWidth,
+    scrollLeft: container.scrollLeft,
+    maxScrollLeft: container.scrollWidth - container.offsetWidth,
+  }
+}
+
+// 向左滑动
+const slideLeft = () => {
+  const info = getScrollInfo()
+  if (!info) return
+
+  // 检查是否需要滚动（内容超出容器）
+  if (info.containerWidth >= info.contentWidth) return
+
+  // 计算滚动距离（容器宽度的80%）
+  const scrollDistance = info.containerWidth * SCROLL_STEP_RATIO
+
+  // 计算目标滚动位置
+  const targetScrollLeft = Math.max(0, info.scrollLeft - scrollDistance)
+
+  // 如果已经在最左边，不执行滚动
+  if (info.scrollLeft <= 0) return
+
+  info.container.scrollTo({
+    left: targetScrollLeft,
+    behavior: 'smooth',
+  })
+}
+
+// 向右滑动
+const slideRight = () => {
+  const info = getScrollInfo()
+  if (!info) return
+
+  // 检查是否需要滚动（内容超出容器）
+  if (info.containerWidth >= info.contentWidth) return
+
+  // 计算滚动距离（容器宽度的80%）
+  const scrollDistance = info.containerWidth * SCROLL_STEP_RATIO
+
+  // 计算目标滚动位置
+  const targetScrollLeft = Math.min(info.maxScrollLeft, info.scrollLeft + scrollDistance)
+
+  // 如果已经在最右边，不执行滚动
+  if (info.scrollLeft >= info.maxScrollLeft) return
+
+  info.container.scrollTo({
+    left: targetScrollLeft,
+    behavior: 'smooth',
+  })
+}
+</script>
+
+<style scoped lang="scss">
+:deep(.el-dropdown-menu__item .el-icon) {
+  font-size: 1.125rem;
+}
+
+.tabs-container {
+  padding-top: 0.1rem;
+  height: 2.5rem;
+  padding-left: 1.25rem;
+  display: flex;
+  align-items: center;
+
+  .tabs-pages {
+    padding: 0 1.25rem;
+    height: 2.5rem;
+    flex: 1;
+    display: flex;
+    font-size: 0.875rem;
+    overflow-x: auto;
+    gap: 0.2rem;
+    &::-webkit-scrollbar {
+      display: none;
+    }
+    .tabs-page-item {
+      padding: 0 0.75rem;
+      display: flex;
+      align-items: center;
+      flex-shrink: 0;
+      gap: 0.5rem;
+      cursor: pointer;
+      color: var(--el-text-color-regular);
+
+      .close-icon {
+        margin-left: 0.25rem;
+        font-size: 0.75rem;
+        width: 0.875rem;
+        height: 0.875rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 20%;
+        transition: all 0.2s ease;
+        flex-shrink: 0;
+        color: var(--el-text-color-regular);
+        cursor: pointer;
+        &:hover {
+          background-color: var(--el-fill-color-darker);
+          color: var(--el-color-danger);
+          transform: scale(1.1);
+        }
+      }
+
+      &:hover {
+        background-color: var(--el-fill-color-light);
+        border-radius: 0.625rem 0.625rem 0.875rem 0.875rem;
+        font-weight: bold;
+      }
+
+      &.active {
+        position: relative;
+        border-radius: 0.625rem 0.625rem 0 0;
+        background-color: color-mix(in srgb, var(--el-color-primary) 20%, transparent);
+        color: var(--el-color-primary);
+        font-weight: bold;
+
+        &::before {
+          content: '';
+          position: absolute;
+          width: 20px;
+          height: 20px;
+          left: -20px;
+          bottom: 0;
+          background: #000;
+          background: radial-gradient(
+            circle at 0 0,
+            transparent 20px,
+            color-mix(in srgb, var(--el-color-primary) 20%, transparent) 21px
+          );
+        }
+        &::after {
+          content: '';
+          position: absolute;
+          width: 20px;
+          height: 20px;
+          right: -20px;
+          bottom: 0;
+          background: #000;
+          background: radial-gradient(
+            circle at 100% 0,
+            transparent 20px,
+            color-mix(in srgb, var(--el-color-primary) 20%, transparent) 21px
+          );
+        }
+      }
+    }
+  }
+  .tabs-dropdown {
+    height: 100%;
+    .tabs-dropdown-wrapper {
+      height: 100%;
+      cursor: pointer;
+      margin-right: 0.5rem;
+      .tabs-dropdown-icon {
+        display: flex;
+        align-items: center;
+        color: var(--el-text-color-regular);
+        &:hover {
+          color: var(--el-color-primary);
+        }
+      }
+    }
+  }
+}
+
+:deep(.el-dropdown-menu__item) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  transition:
+    background-color 0.2s,
+    color 0.2s;
+
+  &:hover {
+    background: var(--el-fill-color-light) !important;
+    color: var(--el-color-primary);
+  }
+
+  &:focus,
+  &:focus-visible {
+    background: var(--el-fill-color-light) !important;
+    color: var(--el-color-primary);
+  }
+}
+</style>
+
+<style lang="scss">
+.tabs-dropdown-popper {
+  border-radius: 8px !important;
+  .el-dropdown-menu {
+    border-radius: 8px !important;
+  }
+}
+</style>

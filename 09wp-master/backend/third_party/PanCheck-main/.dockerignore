@@ -1,0 +1,62 @@
+# Git相关
+.git
+.gitignore
+
+# 文档
+README.md
+*.md
+
+# 开发环境文件
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# 日志文件
+*.log
+logs/
+
+# 临时文件
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
+
+# IDE配置
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 测试文件
+*_test.go
+test/
+tests/
+
+# 构建产物
+dist/
+build/
+tmp/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# 依赖目录（在Docker中会重新安装）
+node_modules/
+vendor/
+frontend/node_modules/
+
+# 数据文件
+data/
+*.db
+*.sqlite
+
+# 参考项目
+reference/
+
+# 其他
+.cache/
+.tmp/
+

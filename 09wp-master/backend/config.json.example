@@ -1,0 +1,17 @@
+{
+  "http_port": "8080",
+  "mysql_dsn": "pan:pan@tcp(127.0.0.1:3306)/pan?charset=utf8mb4&parseTime=True&loc=Local",
+  "jwt_secret": "dfan-netdisk-dev-secret",
+  "pancheck_base_url": "https://pancheck.116818.xyz",
+  "redis": {
+    "enabled": false,
+    "host": "127.0.0.1",
+    "port": 6379,
+    "username": "",
+    "password": "",
+    "search_cache_ttl": 60,
+    "ping_timeout": 3,
+    "connect_timeout_ms": 2000
+  }
+}
+
