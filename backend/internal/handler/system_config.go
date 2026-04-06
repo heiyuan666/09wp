@@ -42,6 +42,7 @@ type publicSystemConfig struct {
 	HotSearchEnabled           bool             `json:"hot_search_enabled"`
 	HomeRankBoardEnabled       bool             `json:"home_rank_board_enabled"`
 	DoubanCoverProxyURL        string           `json:"douban_cover_proxy_url"`
+	TgImageProxyURL            string           `json:"tg_image_proxy_url"`
 }
 
 // systemConfigOut 管理端返回：附带解析后的 friend_links
@@ -105,7 +106,7 @@ func GetSystemConfig(c *gin.Context) {
 
 // GetPublicSystemConfig 获取前台可用系统配置（无需登录）
 func GetPublicSystemConfig(c *gin.Context) {
-	cacheKey := "public:system-config:v2"
+	cacheKey := "public:system-config:v3"
 	if b, ok := service.GetSearchCache(context.Background(), cacheKey); ok {
 		var cached publicSystemConfig
 		if err := json.Unmarshal(b, &cached); err == nil {
@@ -144,6 +145,7 @@ func GetPublicSystemConfig(c *gin.Context) {
 		HotSearchEnabled:           cfg.HotSearchEnabled,
 		HomeRankBoardEnabled:       cfg.HomeRankBoardEnabled,
 		DoubanCoverProxyURL:        cfg.DoubanCoverProxyURL,
+		TgImageProxyURL:            cfg.TgImageProxyURL,
 	})
 
 	// 写入缓存（短 TTL）
@@ -171,6 +173,7 @@ func GetPublicSystemConfig(c *gin.Context) {
 		HotSearchEnabled:           cfg.HotSearchEnabled,
 		HomeRankBoardEnabled:       cfg.HomeRankBoardEnabled,
 		DoubanCoverProxyURL:        cfg.DoubanCoverProxyURL,
+		TgImageProxyURL:            cfg.TgImageProxyURL,
 	}); err == nil {
 		service.SetSearchCache(context.Background(), cacheKey, raw)
 	}
@@ -251,6 +254,7 @@ func UpdateSystemConfig(c *gin.Context) {
 		"hot_search_enabled":            req.HotSearchEnabled,
 		"home_rank_board_enabled":       req.HomeRankBoardEnabled,
 		"douban_cover_proxy_url":        req.DoubanCoverProxyURL,
+		"tg_image_proxy_url":            req.TgImageProxyURL,
 		"auto_delete_invalid_links":     req.AutoDeleteInvalidLinks,
 		"hide_invalid_links_in_search":  req.HideInvalidLinksInSearch,
 		"tg_channel_chat_id":            req.TgChannelChatID,
@@ -266,6 +270,6 @@ func UpdateSystemConfig(c *gin.Context) {
 	}
 
 	// 配置更新后失效前台缓存，避免前台获取旧配置
-	service.DeleteSearchCache(context.Background(), "public:system-config:v2")
+	service.DeleteSearchCache(context.Background(), "public:system-config:v3")
 	response.OK(c, nil)
 }

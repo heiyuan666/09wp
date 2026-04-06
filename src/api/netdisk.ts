@@ -170,6 +170,28 @@ export const siteRegisterSendCode = (data: {
 }) => publicRequest.post<ICommonResponse<{ expires_at: string }>>('/auth/register/send-code', data)
 export const siteLogin = (data: any) =>
   publicRequest.post<ICommonResponse<any>>('/auth/login', data)
+
+/** 创建扫码登录会话（前台用户：for_admin 为 false，与后台管理端扫码区分） */
+export const siteQrLoginCreate = () =>
+  publicRequest.post<
+    ICommonResponse<{
+      sid: string
+      expires_at: string
+      qr_payload: string
+      qr_payload_alt: { type: string; sid: string }
+      for_admin?: boolean
+    }>
+  >('/auth/qr/create', { for_admin: false })
+
+/** 轮询扫码状态：pending | confirmed | expired；confirmed 时含 token */
+export const siteQrLoginStatus = (sid: string) =>
+  publicRequest.get<
+    ICommonResponse<{
+      status: string
+      token?: string
+      user?: { id: number; username: string; email: string }
+    }>
+  >(`/auth/qr/status/${encodeURIComponent(sid)}`)
 export const sitePasswordForgot = (data: { email: string }) =>
   publicRequest.post<ICommonResponse<{ reset_token: string; expires_at: string }>>(
     '/auth/password/forgot',

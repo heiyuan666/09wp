@@ -9,6 +9,7 @@ import (
 	"dfan-netdisk-backend/internal/model"
 	"dfan-netdisk-backend/pkg/response"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 type openNetdiskResourceItem struct {
@@ -146,20 +147,21 @@ func toOpenNetdiskResourceItem(res model.Resource, categoryNameMap map[uint64]st
 	}
 }
 
-func OpenNetdiskResourceList(c *gin.Context) {
-	var (
-		db  = database.DB().Model(&model.Resource{}).Where("status = ?", 1)
-		res []model.Resource
-	)
-
-	db = applyResourceFilters(db, c)
-
-	if keyword := strings.TrimSpace(c.Query("q")); keyword != "" {
-		db = db.Where("title LIKE ? OR description LIKE ? OR tags LIKE ?", "%"+keyword+"%", "%"+keyword+"%", "%"+keyword+"%")
+func openNetdiskResourceListQuery(c *gin.Context, keyword string) *gorm.DB {
+	q := database.DB().Model(&model.Resource{}).Where("status = ?", 1)
+	q = applyResourceFilters(q, c)
+	if keyword != "" {
+		q = q.Where("title LIKE ? OR description LIKE ? OR tags LIKE ?", "%"+keyword+"%", "%"+keyword+"%", "%"+keyword+"%")
 	}
+	return q
+}
+
+func OpenNetdiskResourceList(c *gin.Context) {
+	keyword := strings.TrimSpace(c.Query("q"))
+	var res []model.Resource
 
 	var total int64
-	if err := db.Count(&total).Error; err != nil {
+	if err := openNetdiskResourceListQuery(c, keyword).Count(&total).Error; err != nil {
 		response.Error(c, 500, "query total failed")
 		return
 	}
@@ -174,7 +176,8 @@ func OpenNetdiskResourceList(c *gin.Context) {
 	}
 
 	orderExpr := sortOrderExpr(c.DefaultQuery("sort", "latest"))
-	if err := db.Order(orderExpr).
+	if err := openNetdiskResourceListQuery(c, keyword).
+		Order(orderExpr).
 		Limit(pageSize).
 		Offset((page - 1) * pageSize).
 		Find(&res).Error; err != nil {

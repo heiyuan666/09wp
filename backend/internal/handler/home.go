@@ -13,10 +13,10 @@ func Home(c *gin.Context) {
 	db := database.DB()
 
 	var latest []model.Resource
-	_ = db.Where("status = 1").Order("created_at DESC").Limit(10).Find(&latest).Error
+	_ = db.Where("status = 1").Omit("Description").Order("created_at DESC").Limit(10).Find(&latest).Error
 
 	var hot []model.Resource
-	_ = db.Where("status = 1").Order("view_count DESC").Limit(10).Find(&hot).Error
+	_ = db.Where("status = 1").Omit("Description").Order("view_count DESC").Limit(10).Find(&hot).Error
 
 	var categories []model.Category
 	if err := db.Where("status = 1").Order("sort_order DESC, id DESC").Find(&categories).Error; err != nil {

@@ -56,6 +56,8 @@ export interface ISystemConfig {
   /** 前台首页是否显示排行榜模块 */
   home_rank_board_enabled?: boolean
   douban_cover_proxy_url?: string
+  /** TG 等资源外链封面返代，如 https://wsrv.nl/?url= */
+  tg_image_proxy_url?: string
   auto_delete_invalid_links?: boolean
   hide_invalid_links_in_search?: boolean
 }

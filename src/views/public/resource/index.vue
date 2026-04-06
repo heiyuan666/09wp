@@ -307,6 +307,7 @@ import {
   siteResourcePage,
 } from '@/api/netdisk'
 import { runtimeConfig } from '@/config/runtimeConfig'
+import { buildProxiedImageSrc, shouldApplyTgCoverProxy } from '@/utils/coverProxy'
 import {
   netdiskLinkDisplayRank,
   netdiskPlatformKey,
@@ -515,15 +516,25 @@ const coverImageError = ref(false)
 const coverDisplayUrl = computed(() => {
   const coverRaw = String(data.value?.cover || '').trim()
   if (!coverRaw) return ''
+  let resolved: string
   if (coverRaw.startsWith('//')) {
     try {
-      return `${window.location.protocol}${coverRaw}`
+      resolved = `${window.location.protocol}${coverRaw}`
     } catch {
       return ''
     }
+  } else if (coverRaw.startsWith('http://') || coverRaw.startsWith('https://')) {
+    resolved = coverRaw
+  } else {
+    resolved = `${window.location.origin}${coverRaw.startsWith('/') ? '' : '/'}${coverRaw}`
   }
-  if (coverRaw.startsWith('http://') || coverRaw.startsWith('https://')) return coverRaw
-  return `${window.location.origin}${coverRaw.startsWith('/') ? '' : '/'}${coverRaw}`
+
+  const isRemoteCover = /^https?:\/\//i.test(coverRaw) || coverRaw.startsWith('//')
+  const tmpl = String(runtimeConfig.tgImageProxyUrl || '').trim()
+  if (tmpl && isRemoteCover && shouldApplyTgCoverProxy(data.value, coverRaw)) {
+    return buildProxiedImageSrc(resolved, tmpl)
+  }
+  return resolved
 })
 
 const showResourceCover = computed(() => Boolean(coverDisplayUrl.value) && !coverImageError.value)

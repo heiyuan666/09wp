@@ -80,6 +80,7 @@ import { runtimeConfig } from '@/config/runtimeConfig'
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { siteDoubanHot, type IDoubanHotItem } from '@/api/netdisk'
+import { buildProxiedImageSrc } from '@/utils/coverProxy'
 
 const router = useRouter()
 const route = useRoute()
@@ -112,36 +113,8 @@ const applyDouban = async (kw: string) => {
   await router.push({ path: '/search', query: kw ? { q: kw } : {} })
 }
 
-// 根据配置的返代接口模板拼接封面地址，避免浏览器直接拉取源站图片失败
-const buildDoubanCoverSrc = (cover?: string) => {
-  const c = String(cover || '').trim()
-  if (!c) return ''
-
-  const tmpl = String(runtimeConfig.doubanCoverProxyUrl || '').trim()
-  if (!tmpl) return c
-
-  const enc = encodeURIComponent(c)
-
-  // 支持模板：...{url}
-  if (tmpl.includes('{url}')) return tmpl.replace('{url}', enc)
-
-  // 典型用法：.../down?url= （以 url= 结尾）
-  if (tmpl.endsWith('url=')) return tmpl + enc
-
-  // 如果模板本身已经包含 url= 参数，只取 url= 之前的前缀并追加 enc
-  const idx = tmpl.indexOf('url=')
-  if (idx >= 0) {
-    const prefix = tmpl.slice(0, idx + 'url='.length)
-    return prefix + enc
-  }
-
-  // 保底：如果模板带 ?，使用 &url= 拼接，否则使用 ?url=
-  if (tmpl.includes('?')) {
-    if (tmpl.endsWith('?') || tmpl.endsWith('&')) return tmpl + 'url=' + enc
-    return tmpl + '&url=' + enc
-  }
-  return tmpl.replace(/\/?$/, '') + '?url=' + enc
-}
+const buildDoubanCoverSrc = (cover?: string) =>
+  buildProxiedImageSrc(cover, String(runtimeConfig.doubanCoverProxyUrl || '').trim())
 
 watch(
   () => runtimeConfig.doubanHotNavEnabled,
