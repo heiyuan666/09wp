@@ -115,6 +115,20 @@
         />
       </el-form-item>
 
+      <el-divider content-position="left">TG 资源图片返代</el-divider>
+      <el-form-item label="图片代理地址">
+        <el-input
+          v-model="form.tg_image_proxy_url"
+          type="textarea"
+          :rows="2"
+          placeholder="例如：https://wsrv.nl/?url= 或 https://wsrv.nl/?url={url}"
+        />
+        <span class="item-desc">
+          对来源为 Telegram 同步、且封面为 http(s) 外链的图片生效（本地已落盘到 /public/covers 的不走代理）。规则与上方豆瓣封面代理相同，支持
+          <code>{url}</code> 或以 <code>url=</code> 结尾。
+        </span>
+      </el-form-item>
+
       <el-divider content-position="left">链接有效性检查</el-divider>
       <el-form-item label="自动删除无效链接">
         <el-switch v-model="form.auto_delete_invalid_links" />
@@ -250,6 +264,7 @@ const form = reactive<ISystemConfig>({
   hot_search_enabled: true,
   home_rank_board_enabled: true,
   douban_cover_proxy_url: '',
+  tg_image_proxy_url: '',
   auto_delete_invalid_links: false,
   hide_invalid_links_in_search: false,
 })
@@ -300,6 +315,7 @@ const save = async () => {
       hotSearchEnabled: form.hot_search_enabled ?? true,
       homeRankBoardEnabled: form.home_rank_board_enabled ?? true,
       doubanCoverProxyUrl: form.douban_cover_proxy_url || '',
+      tgImageProxyUrl: form.tg_image_proxy_url || '',
       haokaOrderUrl: form.haoka_order_url || runtimeConfig.haokaOrderUrl,
       haokaAgentRegUrl: form.haoka_agent_reg_url || runtimeConfig.haokaAgentRegUrl,
     })

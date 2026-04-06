@@ -1,0 +1,12 @@
+.dart_tool/
+.packages
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+*.iml
+.idea/
+*.lock
+
+# 运行 flutter create . 后生成的平台目录中可能含本地密钥，勿提交误配：
+**/key.properties
+**/*.jks

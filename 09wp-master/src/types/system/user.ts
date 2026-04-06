@@ -71,12 +71,12 @@ export interface IUserMessageItem {
 // 修改用户个人信息参数
 export interface IUpdateUserProfileParams {
   username: string
-  name: string
-  phone: string
-  email: string
-  avatar: string
-  bio: string
-  tags: string
+  email?: string
+  name?: string
+  phone?: string
+  avatar?: string
+  bio?: string
+  tags?: string
 }
 
 // 修改密码参数

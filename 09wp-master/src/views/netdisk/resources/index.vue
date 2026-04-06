@@ -58,6 +58,19 @@
           {{ categoryName(row.category_id) }}
         </template>
       </el-table-column>
+      <el-table-column label="封面" width="78">
+        <template #default="{ row }">
+          <el-image
+            v-if="adminCoverPreview(row)"
+            :src="adminCoverPreview(row)"
+            fit="cover"
+            style="width: 52px; height: 52px; border-radius: 6px"
+            :preview-src-list="[adminCoverPreview(row)!]"
+            preview-teleported
+          />
+          <span v-else class="cover-empty">—</span>
+        </template>
+      </el-table-column>
       <el-table-column prop="view_count" label="点击" width="90" />
       <el-table-column prop="status" label="状态" width="90">
         <template #default="{ row }">
@@ -309,9 +322,13 @@ import {
   adminResourceUpdate,
   netdiskTransferBatchByLinks,
 } from '@/api/netdisk'
+import { getSystemConfig } from '@/api/systemConfig'
+import { buildProxiedImageSrc, shouldApplyTgCoverProxy } from '@/utils/coverProxy'
 import { platformText } from '@/views/public/search/searchHelpers'
 
 const categories = ref<any[]>([])
+/** TG 外链封面返代模板（与系统配置一致） */
+const tgImageProxyUrl = ref('')
 const list = ref<any[]>([])
 const total = ref(0)
 const visible = ref(false)
@@ -431,6 +448,25 @@ const categoryName = (cid: any) => {
   return c?.name || '-'
 }
 
+const adminCoverPreview = (row: any) => {
+  const coverRaw = String(row?.cover || '').trim()
+  if (!coverRaw) return ''
+  let resolved: string
+  if (coverRaw.startsWith('//')) {
+    resolved = `${window.location.protocol}${coverRaw}`
+  } else if (/^https?:\/\//i.test(coverRaw)) {
+    resolved = coverRaw
+  } else {
+    resolved = `${window.location.origin}${coverRaw.startsWith('/') ? '' : '/'}${coverRaw}`
+  }
+  const isRemote = /^https?:\/\//i.test(coverRaw) || coverRaw.startsWith('//')
+  const tmpl = tgImageProxyUrl.value.trim()
+  if (tmpl && isRemote && shouldApplyTgCoverProxy(row, coverRaw)) {
+    return buildProxiedImageSrc(resolved, tmpl)
+  }
+  return resolved
+}
+
 const onSelect = (rows: any[]) => {
   selectedRows.value = rows
   selectedIds.value = rows.map((r) => Number(r.id))
@@ -441,9 +477,11 @@ const addExtraLink = () => {
   form.extra_links.push('')
 }
 
-const removeExtraLink = (i: number) => {
+const removeExtraLink = (i: number | string) => {
   if (!Array.isArray(form.extra_links)) return
-  form.extra_links.splice(i, 1)
+  const idx = Number(i)
+  if (!Number.isInteger(idx) || idx < 0) return
+  form.extra_links.splice(idx, 1)
 }
 
 const openCreate = () => {
@@ -806,6 +844,10 @@ const submitImportTransfer = async () => {
 }
 
 onMounted(async () => {
+  const { data: cfgRes } = await getSystemConfig()
+  if (cfgRes.code === 200 && cfgRes.data) {
+    tgImageProxyUrl.value = String(cfgRes.data.tg_image_proxy_url || '').trim()
+  }
   await loadCategories()
   await load()
 })

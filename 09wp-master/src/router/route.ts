@@ -72,6 +72,12 @@ export const staticRoutes = [
         meta: { public: true, keepAlive: false },
       },
       {
+        path: 'u/login/qr',
+        name: 'PublicUserQrLoginView',
+        component: () => import('@/views/public/auth/qrLogin.vue'),
+        meta: { public: true, keepAlive: false, hidden: true },
+      },
+      {
         path: 'u/login',
         name: 'PublicUserLoginView',
         component: () => import('@/views/public/auth/login.vue'),

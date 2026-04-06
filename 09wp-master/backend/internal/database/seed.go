@@ -356,6 +356,7 @@ func SeedSystemConfig() error {
 		HotSearchEnabled:           true,
 		HomeRankBoardEnabled:       true,
 		DoubanCoverProxyURL:        "",
+		TgImageProxyURL:            "",
 		AutoDeleteInvalidLinks:     false,
 		HideInvalidLinksInSearch:   false,
 		UpdatedBy:                  0,

@@ -2,14 +2,10 @@
   <div class="profile-page">
     <section class="hero-card">
       <div class="hero-left">
-        <div class="avatar-wrap">
-          <el-avatar :size="92" :src="profileForm.avatar || userStore.userInfo?.avatar" />
-          <el-button class="avatar-btn" type="primary" plain @click="selectAvatarDialogRef?.showDialog()">更换头像</el-button>
-        </div>
         <div class="hero-copy">
           <span class="eyebrow">ACCOUNT CENTER</span>
           <h1>{{ displayName }}</h1>
-          <p>{{ profileForm.bio || '这个人很神秘，暂时还没有留下任何个人介绍。' }}</p>
+          <p>维护管理员账号的登录名与联系邮箱，修改后会立即作用于后台登录。</p>
           <div class="meta-row">
             <span class="meta-pill">ID {{ userStore.userInfo?.id || '-' }}</span>
             <span class="meta-pill">账号 {{ profileForm.username || '-' }}</span>
@@ -34,7 +30,7 @@
         <div class="panel-head">
           <div>
             <h2>基本资料</h2>
-            <p>维护你的公开信息、联系方式和个人介绍，让团队更容易认识你。</p>
+            <p>这里仅维护管理员账号当前支持保存的资料字段。</p>
           </div>
           <el-button type="primary" :loading="savingProfile" @click="saveProfile">保存资料</el-button>
         </div>
@@ -44,32 +40,10 @@
             <el-form-item label="用户名" prop="username">
               <el-input v-model.trim="profileForm.username" placeholder="请输入用户名" maxlength="50" />
             </el-form-item>
-            <el-form-item label="姓名" prop="name">
-              <el-input v-model.trim="profileForm.name" placeholder="请输入姓名" maxlength="50" />
-            </el-form-item>
-          </div>
-
-          <div class="form-grid two-cols">
-            <el-form-item label="手机号" prop="phone">
-              <el-input v-model.trim="profileForm.phone" placeholder="请输入手机号" maxlength="20" />
-            </el-form-item>
             <el-form-item label="邮箱" prop="email">
               <el-input v-model.trim="profileForm.email" placeholder="请输入邮箱" maxlength="100" />
             </el-form-item>
           </div>
-
-          <el-form-item label="个人简介" prop="bio">
-            <el-input v-model.trim="profileForm.bio" type="textarea" :rows="4" placeholder="写几句话介绍一下自己吧" />
-          </el-form-item>
-
-          <el-form-item label="个人标签" prop="tags">
-            <el-input
-              v-model.trim="profileForm.tags"
-              type="textarea"
-              :rows="3"
-              placeholder="多个标签请用逗号分隔，例如：前端、设计、产品"
-            />
-          </el-form-item>
         </el-form>
       </section>
 
@@ -118,7 +92,6 @@
       </aside>
     </div>
 
-    <SelectAvatarDialog ref="selectAvatarDialogRef" @get-avatar="getAvatar" />
   </div>
 </template>
 
@@ -128,19 +101,13 @@ import type { FormInstance, FormRules } from 'element-plus'
 const userStore = useUserStore()
 const profileFormRef = useTemplateRef<FormInstance>('profileFormRef')
 const passwordFormRef = useTemplateRef<FormInstance>('passwordFormRef')
-const selectAvatarDialogRef = useTemplateRef('selectAvatarDialogRef')
 
 const savingProfile = ref(false)
 const savingPassword = ref(false)
 
 const profileForm = reactive({
-  avatar: '',
   username: '',
-  name: '',
-  phone: '',
   email: '',
-  bio: '',
-  tags: '',
 })
 
 const passwordForm = reactive({
@@ -151,16 +118,11 @@ const passwordForm = reactive({
 
 const syncProfileForm = () => {
   const info = userStore.userInfo
-  profileForm.avatar = String(info?.avatar || '')
   profileForm.username = String(info?.username || '')
-  profileForm.name = String(info?.name || '')
-  profileForm.phone = String(info?.phone || '')
   profileForm.email = String(info?.email || '')
-  profileForm.bio = String(info?.bio || '')
-  profileForm.tags = String(info?.tags || '')
 }
 
-const displayName = computed(() => profileForm.name || profileForm.username || '未命名用户')
+const displayName = computed(() => profileForm.username || '未命名用户')
 
 const validateUsername = (_rule: unknown, value: string, callback: (error?: Error) => void) => {
   const v = String(value || '').trim()
@@ -199,10 +161,6 @@ const passwordRules: FormRules = {
   oldPassword: [{ required: true, message: '请输入当前密码', trigger: 'blur' }],
   newPassword: [{ required: true, validator: validateNewPassword, trigger: 'blur' }],
   confirmPassword: [{ required: true, validator: validateConfirmPassword, trigger: 'blur' }],
-}
-
-const getAvatar = (avatar: string) => {
-  profileForm.avatar = avatar
 }
 
 const saveProfile = async () => {

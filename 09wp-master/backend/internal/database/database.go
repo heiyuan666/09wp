@@ -64,6 +64,7 @@ func AutoMigrate() error {
 		&model.UserResourceSubmission{},
 		&model.CaptchaChallenge{},
 		&model.EmailVerificationCode{},
+		&model.QRLoginSession{},
 	); err != nil {
 		return err
 	}
@@ -109,6 +110,11 @@ func ensureRequiredColumns() error {
 	}
 	if !m.HasColumn(&model.SystemConfig{}, "DoubanCoverProxyURL") {
 		if err := m.AddColumn(&model.SystemConfig{}, "DoubanCoverProxyURL"); err != nil {
+			return err
+		}
+	}
+	if !m.HasColumn(&model.SystemConfig{}, "TgImageProxyURL") {
+		if err := m.AddColumn(&model.SystemConfig{}, "TgImageProxyURL"); err != nil {
 			return err
 		}
 	}

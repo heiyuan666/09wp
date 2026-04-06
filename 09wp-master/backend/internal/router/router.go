@@ -51,6 +51,9 @@ func SetupRouter(jwtSecret string) *gin.Engine {
 	api.POST("/auth/register/send-code", handler.SendRegisterEmailCode)
 	api.POST("/auth/register", handler.UserRegister)
 	api.POST("/auth/login", handler.UserLogin)
+	api.POST("/auth/qr/create", handler.QRLoginCreate)
+	api.GET("/auth/qr/status/:sid", handler.QRLoginStatus)
+	api.POST("/auth/qr/confirm", handler.QRLoginConfirm)
 	api.POST("/auth/password/forgot", handler.UserPasswordForgot)
 	api.POST("/auth/password/reset", handler.UserPasswordReset)
 
@@ -105,7 +108,7 @@ func SetupRouter(jwtSecret string) *gin.Engine {
 		systemUser.DELETE("", handler.AdminUserBatchDelete)
 
 		systemUser.PUT("/profile", handler.UpdateProfile)
-		systemUser.PUT("/password", handler.UserChangePassword)
+		systemUser.PUT("/password", handler.AdminChangePassword)
 		systemUser.PUT("/avatar", handler.UpdateAvatar)
 	}
 
