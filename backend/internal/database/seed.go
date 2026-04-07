@@ -354,6 +354,7 @@ func SeedSystemConfig() error {
 		QuarkTargetFolderID:        "0",
 		DoubanHotNavEnabled:        false,
 		HotSearchEnabled:           true,
+		ShowSiteTitle:              true,
 		HomeRankBoardEnabled:       true,
 		DoubanCoverProxyURL:        "",
 		TgImageProxyURL:            "",

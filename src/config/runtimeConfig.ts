@@ -1,4 +1,4 @@
-import { APP_CONFIG } from '@/config/app.config'
+import { API_BASE_URL, APP_CONFIG } from '@/config/app.config'
 import { reactive } from 'vue'
 import type { IFriendLinkItem } from '@/api/systemConfig'
 
@@ -18,6 +18,7 @@ interface IRuntimeConfig {
   friendLinks: IFriendLinkItem[]
   doubanHotNavEnabled: boolean
   hotSearchEnabled: boolean
+  showSiteTitle: boolean
   homeRankBoardEnabled: boolean
   doubanCoverProxyUrl: string
   /** TG 外链封面返代模板（与后台系统配置一致） */
@@ -45,6 +46,7 @@ const defaultConfig: IRuntimeConfig = {
   friendLinks: [],
   doubanHotNavEnabled: false,
   hotSearchEnabled: true,
+  showSiteTitle: true,
   homeRankBoardEnabled: true,
   doubanCoverProxyUrl: '',
   tgImageProxyUrl: '',
@@ -129,8 +131,7 @@ export const loadRuntimeConfig = async () => {
 
   // 再拉取后端最新配置
   try {
-    const baseURL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '')
-    const url = `${baseURL}/public/config`
+    const url = `${API_BASE_URL}/public/config`
     const resp = await fetch(url)
     const res = await resp.json()
     if (res?.code === 200 && res?.data) {
@@ -151,6 +152,7 @@ export const loadRuntimeConfig = async () => {
         friendLinks: Array.isArray(data.friend_links) ? data.friend_links : [],
         doubanHotNavEnabled: data.douban_hot_nav_enabled ?? false,
         hotSearchEnabled: data.hot_search_enabled ?? true,
+        showSiteTitle: data.show_site_title ?? true,
         homeRankBoardEnabled: data.home_rank_board_enabled ?? true,
         doubanCoverProxyUrl: data.douban_cover_proxy_url || '',
         tgImageProxyUrl: data.tg_image_proxy_url || '',

@@ -103,6 +103,11 @@ func ensureRequiredColumns() error {
 			return err
 		}
 	}
+	if !m.HasColumn(&model.SystemConfig{}, "ShowSiteTitle") {
+		if err := m.AddColumn(&model.SystemConfig{}, "ShowSiteTitle"); err != nil {
+			return err
+		}
+	}
 	if !m.HasColumn(&model.SystemConfig{}, "HomeRankBoardEnabled") {
 		if err := m.AddColumn(&model.SystemConfig{}, "HomeRankBoardEnabled"); err != nil {
 			return err
@@ -198,6 +203,7 @@ func ensureRequiredColumns() error {
 		{"system_configs", "haoka_order_url", "ALTER TABLE system_configs ADD COLUMN haoka_order_url varchar(500) NOT NULL DEFAULT ''"},
 		{"system_configs", "haoka_agent_reg_url", "ALTER TABLE system_configs ADD COLUMN haoka_agent_reg_url varchar(500) NOT NULL DEFAULT ''"},
 		{"system_configs", "hot_search_enabled", "ALTER TABLE system_configs ADD COLUMN hot_search_enabled tinyint(1) NOT NULL DEFAULT 1"},
+		{"system_configs", "show_site_title", "ALTER TABLE system_configs ADD COLUMN show_site_title tinyint(1) NOT NULL DEFAULT 1"},
 		{"system_configs", "home_rank_board_enabled", "ALTER TABLE system_configs ADD COLUMN home_rank_board_enabled tinyint(1) NOT NULL DEFAULT 1"},
 		{"system_configs", "clarity_project_id", "ALTER TABLE system_configs ADD COLUMN clarity_project_id varchar(64) NOT NULL DEFAULT ''"},
 		{"system_configs", "clarity_enabled", "ALTER TABLE system_configs ADD COLUMN clarity_enabled tinyint(1) NOT NULL DEFAULT 0"},
@@ -208,6 +214,7 @@ func ensureRequiredColumns() error {
 		{"system_configs", "quark_banned_keywords", "ALTER TABLE system_configs ADD COLUMN quark_banned_keywords text NOT NULL"},
 		{"netdisk_credentials", "quark_ad_filter_enabled", "ALTER TABLE netdisk_credentials ADD COLUMN quark_ad_filter_enabled tinyint(1) NOT NULL DEFAULT 0"},
 		{"netdisk_credentials", "quark_banned_keywords", "ALTER TABLE netdisk_credentials ADD COLUMN quark_banned_keywords text NOT NULL"},
+		{"netdisk_credentials", "aliyun_renew_api_url", "ALTER TABLE netdisk_credentials ADD COLUMN aliyun_renew_api_url varchar(500) NOT NULL DEFAULT ''"},
 		{"system_configs", "pan115_cookie", "ALTER TABLE system_configs ADD COLUMN pan115_cookie text NOT NULL"},
 		{"system_configs", "pan115_auto_save", "ALTER TABLE system_configs ADD COLUMN pan115_auto_save tinyint(1) NOT NULL DEFAULT 0"},
 		{"system_configs", "pan115_target_folder_id", "ALTER TABLE system_configs ADD COLUMN pan115_target_folder_id varchar(64) NOT NULL DEFAULT ''"},

@@ -4,7 +4,7 @@
       <div class="inner">
         <div class="brand animate__animated animate__fadeInLeft animate__faster" @click="goHome">
           <img v-if="runtimeConfig.logoUrl" :src="runtimeConfig.logoUrl" alt="logo" class="brand-logo" />
-          <span class="brand-title">{{ runtimeConfig.siteTitle || '盘小子' }}</span>
+          <span v-if="runtimeConfig.showSiteTitle !== false" class="brand-title">{{ runtimeConfig.siteTitle || '盘小子' }}</span>
         </div>
         <nav class="nav animate__animated animate__fadeInRight animate__faster">
           <el-button text class="nav-link" @click="goHome">首页</el-button>
@@ -34,7 +34,7 @@
         <div class="about">
           <div class="footer-brand">
             <img v-if="runtimeConfig.logoUrl" :src="runtimeConfig.logoUrl" alt="logo" class="brand-logo" />
-            <span class="brand-title">{{ runtimeConfig.siteTitle || '盘小子' }}</span>
+            <span v-if="runtimeConfig.showSiteTitle !== false" class="brand-title">{{ runtimeConfig.siteTitle || '盘小子' }}</span>
           </div>
           <p>{{ runtimeConfig.seoDescription || `${runtimeConfig.siteTitle || '盘小子'}是一个聚合网盘资源的搜索平台。` }}</p>
         </div>
@@ -244,8 +244,10 @@ watch(
   border-radius: 6px;
 }
 .brand-title {
-  font-weight: 700;
-  letter-spacing: 0.5px;
+  font-weight: 600;
+  font-size: 16px;
+  color: var(--el-text-color-regular);
+  letter-spacing: 0.2px;
 }
 .nav {
   display: flex;

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"crypto/md5"
 	"crypto/sha1"
 	"encoding/base64"
 	"encoding/hex"
@@ -10,6 +11,7 @@ import (
 	"fmt"
 	"html"
 	"io"
+	"log"
 	"math"
 	"mime"
 	"net/http"
@@ -20,6 +22,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"dfan-netdisk-backend/internal/database"
@@ -56,6 +59,100 @@ var tgKVLineReg = regexp.MustCompile(`^\s*([^\s：:]+)\s*[：:]\s*(.*)$`)
 var tgImageURLReg = regexp.MustCompile(`https?://[^\s]+?\.(?:jpg|jpeg|png|webp|gif)(?:\?[^\s]*)?`)
 // Telegram / tgme 网页里常见整段 HTML，图片只在 <img src="..."> 中，裸露 URL 正则扫不到。
 var tgImgSrcReg = regexp.MustCompile(`(?is)<img\b[^>]*\bsrc\s*=\s*["']([^"']+)["']`)
+
+func tgCoverDebugEnabled() bool {
+	for _, key := range []string{"TG_COVER_DEBUG", "NETDISK_TRANSFER_DEBUG", "DEBUG", "APP_DEBUG"} {
+		v := strings.ToLower(strings.TrimSpace(os.Getenv(key)))
+		if v == "1" || v == "true" || v == "yes" || v == "on" {
+			return true
+		}
+	}
+	return false
+}
+
+func tgCoverDebugf(format string, args ...any) {
+	if !tgCoverDebugEnabled() {
+		return
+	}
+	log.Printf("[TG-COVER] "+format, args...)
+}
+
+type coversMD5IndexEntry struct {
+	Md5  string `json:"md5"`
+	File string `json:"file"` // e.g. "xxxx.jpg" (仅文件名，不含 /public/covers/)
+}
+
+type coversMD5Index struct {
+	V     int                             `json:"v"`
+	ByKey map[string]coversMD5IndexEntry `json:"by_key"` // key -> md5 + file（key 建议使用 rawURL 或 photoID/AccessHash）
+	ByMD5 map[string]coversMD5IndexEntry `json:"by_md5"` // md5 -> md5 + file
+}
+
+var coversMD5IndexMu sync.Mutex
+
+func coversMD5IndexPath() string {
+	return filepath.Join("storage", "covers", "_md5_index.json")
+}
+
+func md5LowerHexOfBytes(b []byte) string {
+	sum := md5.Sum(b)
+	return hex.EncodeToString(sum[:])
+}
+
+func md5LowerHexOfFile(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	h := md5.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
+func loadCoversMD5Index() coversMD5Index {
+	coversMD5IndexMu.Lock()
+	defer coversMD5IndexMu.Unlock()
+	idx := coversMD5Index{
+		V:     1,
+		ByKey: map[string]coversMD5IndexEntry{},
+		ByMD5: map[string]coversMD5IndexEntry{},
+	}
+	p := coversMD5IndexPath()
+	raw, err := os.ReadFile(p)
+	if err != nil {
+		return idx
+	}
+	_ = json.Unmarshal(raw, &idx)
+	if idx.V == 0 {
+		idx.V = 1
+	}
+	if idx.ByKey == nil {
+		idx.ByKey = map[string]coversMD5IndexEntry{}
+	}
+	if idx.ByMD5 == nil {
+		idx.ByMD5 = map[string]coversMD5IndexEntry{}
+	}
+	return idx
+}
+
+func saveCoversMD5Index(idx coversMD5Index) {
+	coversMD5IndexMu.Lock()
+	defer coversMD5IndexMu.Unlock()
+	p := coversMD5IndexPath()
+	_ = os.MkdirAll(filepath.Dir(p), 0o755)
+	b, err := json.Marshal(idx)
+	if err != nil {
+		return
+	}
+	_ = os.WriteFile(p, b, 0o644)
+}
+
+func coversRelPath(fileName string) string {
+	return "/public/covers/" + strings.TrimSpace(fileName)
+}
 
 // SyncTelegramChannelByID 同步指定频道
 func SyncTelegramChannelByID(channelID uint64) (int, int, error) {
@@ -267,6 +364,7 @@ func syncTelegramChannelByBot(ch *model.TelegramChannel, botToken, proxyURL stri
 			Status:    1,
 			SortOrder: 0,
 		}
+		tgCoverDebugf("external_id=%s source=telegram(bot) cover_write=%s", externalID, strings.TrimSpace(item.Cover))
 		if err := db.Create(&item).Error; err != nil {
 			skipped++
 			continue
@@ -402,6 +500,7 @@ func syncTelegramChannelByMTProto(ch *model.TelegramChannel) (int, int, error) {
 				Status:      1,
 				SortOrder:   0,
 			}
+			tgCoverDebugf("external_id=%s source=telegram(mt) cover_write=%s", externalID, strings.TrimSpace(item.Cover))
 			if err := database.DB().Create(&item).Error; err != nil {
 				skipped++
 				continue
@@ -547,6 +646,7 @@ func backfillTelegramChannelByMTProto(ch *model.TelegramChannel, maxCount int) (
 					Status:      1,
 					SortOrder:   0,
 				}
+				tgCoverDebugf("external_id=%s source=telegram(mt-backfill) cover_write=%s", externalID, strings.TrimSpace(item.Cover))
 				if err := database.DB().Create(&item).Error; err != nil {
 					skipped++
 					if scanned >= maxCount {
@@ -641,30 +741,73 @@ func resolveBotMessageCover(client *http.Client, botToken string, msg *tgMessage
 }
 
 // resolveMTProtoMessageCover 使用 MTProto 媒体直接下载频道消息图片到本地，并返回可访问路径
+func mtProtoPhotoFromMessageMedia(media tg.MessageMediaClass) *tg.Photo {
+	if media == nil {
+		return nil
+	}
+	// 常规图片消息
+	if mm, ok := media.(*tg.MessageMediaPhoto); ok && mm != nil && mm.Photo != nil {
+		if p, ok := mm.Photo.(*tg.Photo); ok && p != nil {
+			return p
+		}
+	}
+	// 链接预览（网页卡片）里的封面图
+	if wm, ok := media.(*tg.MessageMediaWebPage); ok && wm != nil && wm.Webpage != nil {
+		if wp, ok := wm.Webpage.(*tg.WebPage); ok && wp != nil && wp.Photo != nil {
+			if p, ok := wp.Photo.(*tg.Photo); ok && p != nil {
+				tgCoverDebugf("mtproto media=webpage photo_id=%d", p.ID)
+				return p
+			}
+		}
+	}
+	return nil
+}
+
 func resolveMTProtoMessageCover(ctx context.Context, client *telegram.Client, msg *tg.Message, externalID string) string {
 	if client == nil || msg == nil || msg.Media == nil {
 		return ""
 	}
-	mm, ok := msg.Media.(*tg.MessageMediaPhoto)
-	if !ok || mm.Photo == nil {
+	photo := mtProtoPhotoFromMessageMedia(msg.Media)
+	if photo == nil {
+		tgCoverDebugf("external_id=%s mtproto 未解析到 photo（media=%T）", externalID, msg.Media)
 		return ""
 	}
-	photo, ok := mm.Photo.(*tg.Photo)
-	if !ok {
-		return ""
+	saveDir := filepath.Join("storage", "covers")
+	tgCoverDebugf("external_id=%s mtproto photo_id=%d 开始本地化", externalID, photo.ID)
+
+	// 1) 用 photo.ID + accessHash 作为“图片唯一 key”，命中则跳过下载，直接返回已有本地封面路径。
+	keyStr := fmt.Sprintf("mt:%d:%v", photo.ID, photo.AccessHash)
+	keySum := sha1.Sum([]byte(keyStr))
+	byKey := hex.EncodeToString(keySum[:])
+
+	idx := loadCoversMD5Index()
+	if e, ok := idx.ByKey[byKey]; ok && strings.TrimSpace(e.File) != "" {
+		savePath := filepath.Join(saveDir, e.File)
+		if _, err := os.Stat(savePath); err == nil {
+			tgCoverDebugf("external_id=%s 命中ByKey索引 file=%s", externalID, e.File)
+			return coversRelPath(e.File)
+		}
 	}
+
+	// 2) 向后兼容：老逻辑文件名（externalID + photo.ID 的 sha1）若存在，直接复用并注册到索引。
 	base := strings.TrimSpace(externalID)
 	if base == "" {
 		base = fmt.Sprintf("tg:mt:%d", msg.ID)
 	}
-	sum := sha1.Sum([]byte(base + ":" + strconv.FormatInt(photo.ID, 10)))
-	fileName := fmt.Sprintf("%x.jpg", sum[:])
-	saveDir := filepath.Join("storage", "covers")
-	savePath := filepath.Join(saveDir, fileName)
-	relPath := "/public/covers/" + fileName
-	if _, err := os.Stat(savePath); err == nil {
-		return relPath
+	sumOld := sha1.Sum([]byte(base + ":" + strconv.FormatInt(photo.ID, 10)))
+	oldFileName := fmt.Sprintf("%x.jpg", sumOld[:])
+	oldSavePath := filepath.Join(saveDir, oldFileName)
+	if _, err := os.Stat(oldSavePath); err == nil {
+		if md5Hex, err2 := md5LowerHexOfFile(oldSavePath); err2 == nil && md5Hex != "" {
+			e := coversMD5IndexEntry{Md5: md5Hex, File: oldFileName}
+			idx.ByKey[byKey] = e
+			idx.ByMD5[md5Hex] = e
+			saveCoversMD5Index(idx)
+		}
+		tgCoverDebugf("external_id=%s 命中旧文件 file=%s", externalID, oldFileName)
+		return coversRelPath(oldFileName)
 	}
+
 	if err := os.MkdirAll(saveDir, 0o755); err != nil {
 		return ""
 	}
@@ -679,38 +822,111 @@ func resolveMTProtoMessageCover(ctx context.Context, client *telegram.Client, ms
 	dl := downloader.NewDownloader()
 	dctx, cancel := context.WithTimeout(ctx, 25*time.Second)
 	defer cancel()
-	if _, err := dl.Download(client.API(), loc).WithThreads(4).ToPath(dctx, savePath); err != nil {
-		_ = os.Remove(savePath)
+
+	// 3) 下载到临时文件，计算内容 md5，若 md5 已存在则复用已有文件名。
+	tmpFileName := "tmp-" + byKey + ".jpg"
+	tmpPath := filepath.Join(saveDir, tmpFileName)
+	_ = os.Remove(tmpPath)
+	if _, err := dl.Download(client.API(), loc).WithThreads(4).ToPath(dctx, tmpPath); err != nil {
+		_ = os.Remove(tmpPath)
+		tgCoverDebugf("external_id=%s mtproto 下载失败: %v", externalID, err)
 		return ""
 	}
-	return relPath
+
+	md5Hex, err := md5LowerHexOfFile(tmpPath)
+	if err != nil || md5Hex == "" {
+		_ = os.Remove(tmpPath)
+		tgCoverDebugf("external_id=%s 计算md5失败", externalID)
+		return ""
+	}
+
+	if e, ok := idx.ByMD5[md5Hex]; ok && strings.TrimSpace(e.File) != "" {
+		existPath := filepath.Join(saveDir, e.File)
+		if _, err2 := os.Stat(existPath); err2 == nil {
+			_ = os.Remove(tmpPath)
+			idx.ByKey[byKey] = coversMD5IndexEntry{Md5: md5Hex, File: e.File}
+			saveCoversMD5Index(idx)
+			tgCoverDebugf("external_id=%s 命中ByMD5复用 file=%s", externalID, e.File)
+			return coversRelPath(e.File)
+		}
+	}
+
+	newFileName := md5Hex + ".jpg"
+	newPath := filepath.Join(saveDir, newFileName)
+	if _, err := os.Stat(newPath); err == nil {
+		_ = os.Remove(tmpPath)
+		idx.ByKey[byKey] = coversMD5IndexEntry{Md5: md5Hex, File: newFileName}
+		idx.ByMD5[md5Hex] = coversMD5IndexEntry{Md5: md5Hex, File: newFileName}
+		saveCoversMD5Index(idx)
+		tgCoverDebugf("external_id=%s 文件已存在 file=%s", externalID, newFileName)
+		return coversRelPath(newFileName)
+	}
+
+	if err := os.Rename(tmpPath, newPath); err != nil {
+		_ = os.Remove(tmpPath)
+		tgCoverDebugf("external_id=%s 重命名失败: %v", externalID, err)
+		return ""
+	}
+	idx.ByKey[byKey] = coversMD5IndexEntry{Md5: md5Hex, File: newFileName}
+	idx.ByMD5[md5Hex] = coversMD5IndexEntry{Md5: md5Hex, File: newFileName}
+	saveCoversMD5Index(idx)
+	tgCoverDebugf("external_id=%s 新封面落盘 file=%s", externalID, newFileName)
+	return coversRelPath(newFileName)
 }
 
 func localizeCoverURL(client *http.Client, rawURL, externalID string) string {
 	rawURL = strings.TrimSpace(rawURL)
 	if rawURL == "" || strings.HasPrefix(strings.ToLower(rawURL), "blob:") {
+		tgCoverDebugf("external_id=%s rawURL为空或blob，跳过", externalID)
 		return ""
+	}
+	// 已是本站静态封面路径时直接返回，避免二次处理把 /public/covers/... 误判为“非法 URL”。
+	if strings.HasPrefix(rawURL, "/public/covers/") {
+		tgCoverDebugf("external_id=%s 已是本地封面路径，直接使用=%s", externalID, rawURL)
+		return rawURL
 	}
 	parsed, err := url.Parse(rawURL)
 	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+		tgCoverDebugf("external_id=%s rawURL非法 raw=%s", externalID, rawURL)
 		return ""
 	}
 
-	sum := sha1.Sum([]byte(externalID + "|" + rawURL))
-	baseName := hex.EncodeToString(sum[:])
+	saveDir := filepath.Join("storage", "covers")
+
+	// 1) URL 去重：用 rawURL 做“唯一 key”，命中索引则跳过下载，直接返回已有本地封面。
+	keySum := sha1.Sum([]byte(rawURL))
+	byKey := hex.EncodeToString(keySum[:])
+	idx := loadCoversMD5Index()
+	if e, ok := idx.ByKey[byKey]; ok && strings.TrimSpace(e.File) != "" {
+		savePath := filepath.Join(saveDir, e.File)
+		if _, err := os.Stat(savePath); err == nil {
+			tgCoverDebugf("external_id=%s URL命中ByKey file=%s", externalID, e.File)
+			return coversRelPath(e.File)
+		}
+	}
+
+	// 2) 向后兼容：老逻辑的文件名（externalID + rawURL 的 sha1）若已存在，则复用并补齐索引。
+	oldSum := sha1.Sum([]byte(externalID + "|" + rawURL))
+	oldBaseName := hex.EncodeToString(oldSum[:])
 	ext := strings.ToLower(filepath.Ext(parsed.Path))
 	if ext == "" {
 		ext = ".jpg"
 	}
-	fileName := baseName + ext
-	relPath := "/public/covers/" + fileName
-	saveDir := filepath.Join("storage", "covers")
-	savePath := filepath.Join(saveDir, fileName)
-
-	if _, err := os.Stat(savePath); err == nil {
-		return relPath
+	oldFileName := oldBaseName + ext
+	oldSavePath := filepath.Join(saveDir, oldFileName)
+	if _, err := os.Stat(oldSavePath); err == nil {
+		if md5Hex, err2 := md5LowerHexOfFile(oldSavePath); err2 == nil && md5Hex != "" {
+			e := coversMD5IndexEntry{Md5: md5Hex, File: oldFileName}
+			idx.ByKey[byKey] = e
+			idx.ByMD5[md5Hex] = e
+			saveCoversMD5Index(idx)
+		}
+		tgCoverDebugf("external_id=%s 命中旧URL文件 file=%s", externalID, oldFileName)
+		return coversRelPath(oldFileName)
 	}
+
 	if err := os.MkdirAll(saveDir, 0o755); err != nil {
+		tgCoverDebugf("external_id=%s 创建目录失败，回退原URL: %v", externalID, err)
 		return rawURL
 	}
 
@@ -720,10 +936,12 @@ func localizeCoverURL(client *http.Client, rawURL, externalID string) string {
 	}
 	resp, err := httpClient.Get(rawURL)
 	if err != nil {
+		tgCoverDebugf("external_id=%s 下载URL失败，回退原URL: %v", externalID, err)
 		return rawURL
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		tgCoverDebugf("external_id=%s 下载URL返回HTTP=%d，回退原URL", externalID, resp.StatusCode)
 		return rawURL
 	}
 
@@ -732,24 +950,54 @@ func localizeCoverURL(client *http.Client, rawURL, externalID string) string {
 			norm := strings.ToLower(exts[0])
 			if norm != "" && norm != ext {
 				ext = norm
-				fileName = baseName + ext
-				relPath = "/public/covers/" + fileName
-				savePath = filepath.Join(saveDir, fileName)
 			}
 		}
-	}
-	if _, err := os.Stat(savePath); err == nil {
-		return relPath
 	}
 
 	buf, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
 	if err != nil || len(buf) == 0 {
+		tgCoverDebugf("external_id=%s 读取图片失败或空内容，回退原URL", externalID)
 		return rawURL
 	}
+
+	md5Hex := md5LowerHexOfBytes(buf)
+	if md5Hex == "" {
+		tgCoverDebugf("external_id=%s 计算URL图片md5失败，回退原URL", externalID)
+		return rawURL
+	}
+
+	// 3) 如果 md5 命中索引，则复用已有文件，不写入新内容。
+	if e, ok := idx.ByMD5[md5Hex]; ok && strings.TrimSpace(e.File) != "" {
+		existPath := filepath.Join(saveDir, e.File)
+		if _, err := os.Stat(existPath); err == nil {
+			idx.ByKey[byKey] = coversMD5IndexEntry{Md5: md5Hex, File: e.File}
+			saveCoversMD5Index(idx)
+			tgCoverDebugf("external_id=%s URL命中ByMD5 file=%s", externalID, e.File)
+			return coversRelPath(e.File)
+		}
+	}
+
+	// 4) md5 未命中：以 md5 命名落盘。
+	fileName := md5Hex + ext
+	savePath := filepath.Join(saveDir, fileName)
+	if _, err := os.Stat(savePath); err == nil {
+		idx.ByKey[byKey] = coversMD5IndexEntry{Md5: md5Hex, File: fileName}
+		idx.ByMD5[md5Hex] = coversMD5IndexEntry{Md5: md5Hex, File: fileName}
+		saveCoversMD5Index(idx)
+		tgCoverDebugf("external_id=%s URL文件已存在 file=%s", externalID, fileName)
+		return coversRelPath(fileName)
+	}
+
 	if err := os.WriteFile(savePath, buf, 0o644); err != nil {
+		tgCoverDebugf("external_id=%s 写文件失败，回退原URL: %v", externalID, err)
 		return rawURL
 	}
-	return relPath
+
+	idx.ByKey[byKey] = coversMD5IndexEntry{Md5: md5Hex, File: fileName}
+	idx.ByMD5[md5Hex] = coversMD5IndexEntry{Md5: md5Hex, File: fileName}
+	saveCoversMD5Index(idx)
+	tgCoverDebugf("external_id=%s URL封面落盘 file=%s", externalID, fileName)
+	return coversRelPath(fileName)
 }
 
 func getTelegramBotFileURL(client *http.Client, botToken, fileID string) (string, error) {

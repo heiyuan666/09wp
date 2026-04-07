@@ -1,8 +1,11 @@
 package service
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -13,6 +16,9 @@ import (
 const (
 	xunleiClientID = "Xqp0kJBXWhwaTpB6"
 	xunleiDeviceID = "925b7631473a13716b791d7f28289cad"
+	// 以下与 xinyue-search XunleiPan.php getCaptchaToken 保持一致（网页端 shield 常用固定签名）
+	xunleiLegacyCaptchaSign      = "1.fe2108ad808a74c9ac0243309242726c"
+	xunleiLegacyCaptchaTimestamp = "1645241033384"
 )
 
 var reXunleiShare = regexp.MustCompile(`(?i)(?:https?://)?pan\.xunlei\.com/s/([a-zA-Z0-9_-]+)`)
@@ -45,17 +51,22 @@ func XunleiSaveByShareLink(link string, passcodeOverride string) (XunleiTransfer
 	targetParentID := effectiveXunleiFolder(picked, cfg.XunleiTargetFolderID)
 
 	client := &http.Client{Timeout: 30 * time.Second}
-	accessToken, _, err := xunleiGetAccessToken(client, refreshToken)
+	accessToken, newRefresh, err := xunleiGetAccessToken(client, refreshToken)
 	if err != nil {
 		return XunleiTransferResult{}, err
 	}
-	captchaToken, err := xunleiGetCaptchaToken(client)
-	if err != nil {
-		return XunleiTransferResult{}, err
+	if err := PersistXunleiRefreshToken(refreshToken, newRefresh); err != nil {
+		log.Printf("persist xunlei refresh_token: %v", err)
 	}
 
-	headers := xunleiHeaders(accessToken, captchaToken)
-	shareInfo, err := xunleiGetShare(client, shareID, passcode, headers)
+	// 对齐 xinyue-search：只请求一次 get:/drive/v1/share 的 captcha，全流程共用（含 share / restore / tasks / 建分享）
+	captchaTok, err := xunleiInitCaptchaToken(client)
+	if err != nil {
+		return XunleiTransferResult{}, err
+	}
+	driveHeaders := xunleiHeaders(accessToken, captchaTok)
+
+	shareInfo, err := xunleiGetShare(client, shareID, passcode, driveHeaders)
 	if err != nil {
 		return XunleiTransferResult{}, err
 	}
@@ -66,11 +77,11 @@ func XunleiSaveByShareLink(link string, passcodeOverride string) (XunleiTransfer
 		return XunleiTransferResult{}, fmt.Errorf("分享内容为空或无法解析文件")
 	}
 
-	restoreTaskID, err := xunleiRestore(client, shareID, passCodeToken, targetParentID, fileIDs, headers)
+	restoreTaskID, err := xunleiRestore(client, shareID, passCodeToken, targetParentID, fileIDs, driveHeaders)
 	if err != nil {
 		return XunleiTransferResult{}, err
 	}
-	taskData, err := xunleiWaitTask(client, restoreTaskID, headers)
+	taskData, err := xunleiWaitTask(client, restoreTaskID, driveHeaders)
 	if err != nil {
 		return XunleiTransferResult{}, err
 	}
@@ -93,7 +104,7 @@ func XunleiSaveByShareLink(link string, passcodeOverride string) (XunleiTransfer
 		Message: "转存成功",
 	}
 	if cfg.ReplaceLinkAfterTransfer {
-		ownURL, err := xunleiCreateOwnShare(client, traceIDs, headers)
+		ownURL, err := xunleiCreateOwnShare(client, traceIDs, driveHeaders)
 		if err != nil {
 			out.Message = "转存成功（未生成本人分享链接：" + trimTo255(err.Error()) + "）"
 		} else {
@@ -117,67 +128,141 @@ func parseXunleiShare(link string) (string, string, error) {
 	return shareID, pass, nil
 }
 
+// xunleiDoJSON 调用 api-pan.xunlei.com：HTTP 4xx 时尝试按业务 JSON 解析（含 captcha_invalid）
+func xunleiDoJSON(client *http.Client, method, endpoint string, headers map[string]string, body []byte) (map[string]any, error) {
+	var rd io.Reader
+	if len(body) > 0 {
+		rd = bytes.NewReader(body)
+	}
+	req, err := http.NewRequest(method, endpoint, rd)
+	if err != nil {
+		return nil, err
+	}
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode >= 400 {
+		var j map[string]any
+		if json.Unmarshal(raw, &j) == nil {
+			if err := xunleiRespErr(j); err != nil {
+				return nil, err
+			}
+		}
+		return nil, fmt.Errorf("迅雷错误: %s", string(raw))
+	}
+	var out map[string]any
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return nil, fmt.Errorf("迅雷返回解析失败")
+	}
+	return out, nil
+}
+
+const xunleiWebClientVersion = "1.45.0"
+
+// xunleiHeaders 对齐 xinyue-search XunleiPan.php urlHeader（浏览器访问 api-pan）
 func xunleiHeaders(accessToken string, captchaToken string) map[string]string {
 	return map[string]string{
-		"accept":          "*/*",
-		"content-type":    "application/json",
-		"origin":          "https://pan.xunlei.com",
-		"referer":         "https://pan.xunlei.com/",
-		"user-agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
-		"x-client-id":     xunleiClientID,
-		"x-device-id":     xunleiDeviceID,
-		"authorization":   "Bearer " + accessToken,
-		"x-captcha-token": captchaToken,
+		"accept":             "*/*",
+		"accept-language":    "zh-CN,zh;q=0.9",
+		"content-type":       "application/json",
+		"origin":             "https://pan.xunlei.com",
+		"referer":            "https://pan.xunlei.com/",
+		"sec-ch-ua":          `"Not;A=Brand";v="99", "Google Chrome";v="139", "Chromium";v="139"`,
+		"sec-ch-ua-mobile":   "?0",
+		"sec-ch-ua-platform": `"Windows"`,
+		"sec-fetch-dest":     "empty",
+		"sec-fetch-mode":     "cors",
+		"sec-fetch-site":     "same-site",
+		"user-agent":         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
+		"x-client-id":        xunleiClientID,
+		"x-client-version":   xunleiWebClientVersion,
+		"x-device-id":        xunleiDeviceID,
+		"authorization":      "Bearer " + accessToken,
+		"x-captcha-token":    captchaToken,
 	}
 }
 
-func xunleiGetAccessToken(client *http.Client, refreshToken string) (string, string, error) {
+func xunleiGetAccessToken(client *http.Client, refreshToken string) (access string, newRefresh string, err error) {
 	reqBody := map[string]any{
 		"client_id":     xunleiClientID,
 		"grant_type":    "refresh_token",
 		"refresh_token": refreshToken,
 	}
 	raw, _ := json.Marshal(reqBody)
-	resp, err := httpDoJSONWithHeaders(client, http.MethodPost, "https://xluser-ssl.xunlei.com/v1/auth/token", map[string]string{
-		"content-type": "application/json",
-		"user-agent":   "Mozilla/5.0",
-	}, raw, "迅雷")
+	req, err := http.NewRequest(http.MethodPost, "https://xluser-ssl.xunlei.com/v1/auth/token", bytes.NewReader(raw))
 	if err != nil {
 		return "", "", err
 	}
-	access, _ := resp["access_token"].(string)
+	req.Header.Set("content-type", "application/json")
+	req.Header.Set("user-agent", "Mozilla/5.0")
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", "", err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode >= 400 {
+		var j map[string]any
+		if json.Unmarshal(body, &j) == nil {
+			if errStr, _ := j["error"].(string); errStr == "invalid_grant" {
+				desc, _ := j["error_description"].(string)
+				return "", "", fmt.Errorf(
+					"迅雷 refresh_token 已失效（invalid_grant）：%s。若提示已在某时刻刷新，说明旧 token 已作废，请在浏览器打开 pan.xunlei.com 登录后重新抓取 refresh_token 填入「网盘凭证」",
+					trimTo255(desc),
+				)
+			}
+		}
+		return "", "", fmt.Errorf("迅雷错误: %s", string(body))
+	}
+	var out map[string]any
+	if err := json.Unmarshal(body, &out); err != nil {
+		return "", "", fmt.Errorf("迅雷 access_token 响应解析失败")
+	}
+	access, _ = out["access_token"].(string)
 	if access == "" {
-		if data, ok := resp["data"].(map[string]any); ok {
+		if data, ok := out["data"].(map[string]any); ok {
 			access, _ = data["access_token"].(string)
 		}
 	}
 	if access == "" {
 		return "", "", fmt.Errorf("迅雷 access_token 获取失败")
 	}
-	newRefresh, _ := resp["refresh_token"].(string)
+	newRefresh, _ = out["refresh_token"].(string)
 	if newRefresh == "" {
-		if data, ok := resp["data"].(map[string]any); ok {
+		if data, ok := out["data"].(map[string]any); ok {
 			newRefresh, _ = data["refresh_token"].(string)
 		}
 	}
 	return access, newRefresh, nil
 }
 
-func xunleiGetCaptchaToken(client *http.Client) (string, error) {
+// xunleiInitCaptchaToken 对齐 xinyue-search XunleiPan.php getCaptchaToken（shield 仅 Chrome/91 UA + 固定 meta）
+func xunleiInitCaptchaToken(client *http.Client) (string, error) {
 	reqBody := map[string]any{
 		"client_id": xunleiClientID,
 		"action":    "get:/drive/v1/share",
 		"device_id": xunleiDeviceID,
-		"meta": map[string]any{
+		"meta": map[string]string{
+			"username":       "",
+			"phone_number":   "",
+			"email":          "",
 			"package_name":   "pan.xunlei.com",
-			"client_version": "1.45.0",
+			"client_version": xunleiWebClientVersion,
+			"captcha_sign":   xunleiLegacyCaptchaSign,
+			"timestamp":      xunleiLegacyCaptchaTimestamp,
 			"user_id":        "0",
 		},
 	}
 	raw, _ := json.Marshal(reqBody)
 	resp, err := httpDoJSONWithHeaders(client, http.MethodPost, "https://xluser-ssl.xunlei.com/v1/shield/captcha/init", map[string]string{
 		"content-type": "application/json",
-		"user-agent":   "Mozilla/5.0",
+		"user-agent":   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
 	}, raw, "迅雷")
 	if err != nil {
 		return "", err
@@ -203,7 +288,7 @@ func xunleiGetShare(client *http.Client, shareID, passcode string, headers map[s
 	q.Set("page_token", "")
 	q.Set("thumbnail_size", "SIZE_SMALL")
 	endpoint := "https://api-pan.xunlei.com/drive/v1/share?" + q.Encode()
-	resp, err := httpDoJSONWithHeaders(client, http.MethodGet, endpoint, headers, nil, "迅雷")
+	resp, err := xunleiDoJSON(client, http.MethodGet, endpoint, headers, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -234,17 +319,27 @@ func xunleiExtractShareFileIDs(shareInfo map[string]any) []string {
 	return out
 }
 
+// xunleiNormalizeParentID 根目录：迅雷部分环境不接受字面 "0"，需空串且 specify_parent_id=false（见 pan.xunlei.com 与第三方实现）
+func xunleiNormalizeParentID(parentID string) (id string, specify bool) {
+	s := strings.TrimSpace(parentID)
+	if s == "" || s == "0" || strings.EqualFold(s, "root") {
+		return "", false
+	}
+	return s, true
+}
+
 func xunleiRestore(client *http.Client, shareID, passCodeToken, parentID string, fileIDs []string, headers map[string]string) (string, error) {
+	pid, specify := xunleiNormalizeParentID(parentID)
 	reqBody := map[string]any{
-		"parent_id":         parentID,
+		"parent_id":         pid,
 		"share_id":          shareID,
 		"pass_code_token":   passCodeToken,
 		"ancestor_ids":      []string{},
-		"specify_parent_id": true,
+		"specify_parent_id": specify,
 		"file_ids":          fileIDs,
 	}
 	raw, _ := json.Marshal(reqBody)
-	resp, err := httpDoJSONWithHeaders(client, http.MethodPost, "https://api-pan.xunlei.com/drive/v1/share/restore", headers, raw, "迅雷")
+	resp, err := xunleiDoJSON(client, http.MethodPost, "https://api-pan.xunlei.com/drive/v1/share/restore", headers, raw)
 	if err != nil {
 		return "", err
 	}
@@ -267,7 +362,7 @@ func xunleiWaitTask(client *http.Client, taskID string, headers map[string]strin
 	var last map[string]any
 	for i := 0; i < 20; i++ {
 		endpoint := "https://api-pan.xunlei.com/drive/v1/tasks/" + url.PathEscape(taskID)
-		resp, err := httpDoJSONWithHeaders(client, http.MethodGet, endpoint, headers, nil, "迅雷")
+		resp, err := xunleiDoJSON(client, http.MethodGet, endpoint, headers, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -335,7 +430,7 @@ func xunleiCreateOwnShare(client *http.Client, fileIDs []string, headers map[str
 		},
 	}
 	raw, _ := json.Marshal(reqBody)
-	resp, err := httpDoJSONWithHeaders(client, http.MethodPost, "https://api-pan.xunlei.com/drive/v1/share", headers, raw, "迅雷")
+	resp, err := xunleiDoJSON(client, http.MethodPost, "https://api-pan.xunlei.com/drive/v1/share", headers, raw)
 	if err != nil {
 		return "", err
 	}
@@ -363,20 +458,51 @@ func xunleiRespErr(m map[string]any) error {
 	if m == nil {
 		return fmt.Errorf("迅雷返回为空")
 	}
-	if code, ok := m["error_code"].(string); ok && code != "" {
+	if errStr, ok := m["error"].(string); ok && errStr != "" {
+		if errStr == "captcha_invalid" {
+			return fmt.Errorf("迅雷风控校验未通过（captcha_invalid）。请稍后重试；若多次失败，在浏览器打开 pan.xunlei.com 完成验证后重抓 refresh_token，并避免多台服务器共用同一 token")
+		}
 		msg, _ := m["error_description"].(string)
 		if msg == "" {
-			msg = code
+			msg = errStr
+		}
+		return fmt.Errorf("迅雷: %s", msg)
+	}
+	codeStr, hasStr := m["error_code"].(string)
+	codeNum, hasNum := m["error_code"].(float64)
+	if hasStr && codeStr != "" {
+		if codeStr == "9" {
+			return fmt.Errorf("迅雷风控校验未通过（captcha_invalid）。请稍后重试；若多次失败，在浏览器打开 pan.xunlei.com 完成验证后重抓 refresh_token，并避免多台服务器共用同一 token")
+		}
+		msg, _ := m["error_description"].(string)
+		if msg == "" {
+			msg = codeStr
+		}
+		return fmt.Errorf("迅雷: %s", msg)
+	}
+	if hasNum && codeNum != 0 {
+		msg, _ := m["error_description"].(string)
+		if msg == "" {
+			msg = fmt.Sprintf("error_code=%.0f", codeNum)
+		}
+		if codeNum == 9 {
+			return fmt.Errorf("迅雷风控校验未通过（captcha_invalid）。请稍后重试；若多次失败，在浏览器打开 pan.xunlei.com 完成验证后重抓 refresh_token，并避免多台服务器共用同一 token")
 		}
 		return fmt.Errorf("迅雷: %s", msg)
 	}
 	if data, ok := m["data"].(map[string]any); ok {
+		if errStr, ok := data["error"].(string); ok && errStr == "captcha_invalid" {
+			return fmt.Errorf("迅雷风控校验未通过（captcha_invalid）。请稍后重试；若多次失败，在浏览器打开 pan.xunlei.com 完成验证后重抓 refresh_token，并避免多台服务器共用同一 token")
+		}
 		if code, ok := data["error_code"].(string); ok && code != "" {
 			msg, _ := data["error_description"].(string)
 			if msg == "" {
 				msg = code
 			}
 			return fmt.Errorf("迅雷: %s", msg)
+		}
+		if n, ok := data["error_code"].(float64); ok && n == 9 {
+			return fmt.Errorf("迅雷风控校验未通过（captcha_invalid）。请稍后重试；若多次失败，在浏览器打开 pan.xunlei.com 完成验证后重抓 refresh_token，并避免多台服务器共用同一 token")
 		}
 	}
 	return nil

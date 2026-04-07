@@ -76,7 +76,7 @@ func (j *JSONCookieAccounts) Scan(src interface{}) error {
 
 // Value 实现 driver.Valuer
 func (j JSONCookieAccounts) Value() (driver.Value, error) {
-	if j == nil || len(j) == 0 {
+	if len(j) == 0 {
 		return "[]", nil
 	}
 	b, err := json.Marshal([]NetdiskCookieAccount(j))

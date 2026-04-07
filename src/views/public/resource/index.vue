@@ -4,115 +4,123 @@
       <template v-if="data">
         <div class="top-grid">
           <el-card class="main-card" shadow="never">
-            <div class="label-row">
-              <div class="seq-badge" title="资源编号">
-                <span class="seq-icon" aria-hidden="true">
-                  <svg
-                    viewBox="0 0 24 24"
-                    width="14"
-                    height="14"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    <path
-                      d="M10.5 13.5L13.5 10.5"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    />
-                    <path
-                      d="M9 6.5H7.8C5.253 6.5 4 7.753 4 10.3V11.5"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                    />
-                    <path
-                      d="M15 17.5H16.2C18.747 17.5 20 16.247 20 13.7V12.5"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                    />
-                    <path
-                      d="M6.5 9V7.8C6.5 5.253 7.753 4 10.3 4H11.5"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                    />
-                    <path
-                      d="M17.5 15V16.2C17.5 18.747 16.247 20 13.7 20H12.5"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                    />
-                  </svg>
-                </span>
-                <span class="seq-text">No. {{ data.id || id }}</span>
+            <div class="detail-layout">
+              <div class="poster-col">
+                <div class="cover-box poster-box">
+                  <img
+                    v-if="showResourceCover"
+                    :src="coverDisplayUrl"
+                    :alt="String(data.title || '资源封面')"
+                    class="cover-image poster-image"
+                    loading="lazy"
+                    decoding="async"
+                    referrerpolicy="no-referrer"
+                    @error="onCoverImageError"
+                  />
+                  <div v-else class="poster-placeholder">暂无封面</div>
+                </div>
+                <div class="qr-box poster-qr">
+                  <img v-if="qrDataUrl" :src="qrDataUrl" alt="二维码" />
+                  <div v-else class="qr-placeholder">生成中…</div>
+                  <span>扫码保存链接</span>
+                </div>
               </div>
-              <el-tag type="primary" effect="light" round>资源详情</el-tag>
-            </div>
 
-            <h1 class="title" :title="String(data.title || '未命名资源')">
-              {{ data.title || '未命名资源' }}
-            </h1>
+              <div class="info-col">
+                <div class="label-row">
+                  <div class="seq-badge" title="资源编号">
+                    <span class="seq-icon" aria-hidden="true">
+                      <svg
+                        viewBox="0 0 24 24"
+                        width="14"
+                        height="14"
+                        fill="none"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path
+                          d="M10.5 13.5L13.5 10.5"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        />
+                        <path
+                          d="M9 6.5H7.8C5.253 6.5 4 7.753 4 10.3V11.5"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                        />
+                        <path
+                          d="M15 17.5H16.2C18.747 17.5 20 16.247 20 13.7V12.5"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                        />
+                        <path
+                          d="M6.5 9V7.8C6.5 5.253 7.753 4 10.3 4H11.5"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                        />
+                        <path
+                          d="M17.5 15V16.2C17.5 18.747 16.247 20 13.7 20H12.5"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                        />
+                      </svg>
+                    </span>
+                    <span class="seq-text">No. {{ data.id || id }}</span>
+                  </div>
+                  <el-tag type="primary" effect="light" round>资源详情</el-tag>
+                </div>
 
-            <div v-if="showResourceCover" class="cover-box">
-              <img
-                :src="coverDisplayUrl"
-                :alt="String(data.title || '资源封面')"
-                class="cover-image"
-                loading="lazy"
-                decoding="async"
-                referrerpolicy="no-referrer"
-                @error="onCoverImageError"
-              />
-            </div>
+                <h1 class="title" :title="String(data.title || '未命名资源')">
+                  {{ data.title || '未命名资源' }}
+                </h1>
 
-            <div class="desc-box">{{ fullText }}</div>
+                <div class="desc-box">{{ fullText }}</div>
 
-            <div class="meta-row">
-              <span class="dot" />分享时间
-              <span class="value">{{ formatDate(data.share_at || data.created_at) }}</span>
-            </div>
-            <div class="meta-row">
-              <span class="dot" />收录时间
-              <span class="value">{{ formatDate(data.created_at) }}</span>
-            </div>
-            <div class="meta-row">
-              <span class="dot" />网盘平台
-              <span class="value">{{ platformSummary }}</span>
-            </div>
-            <div class="meta-row tags-row">
-              <span class="dot" />关键词标签
-              <div class="tags">
-                <el-tag
-                  v-for="tag in tags"
-                  :key="tag"
-                  effect="light"
-                  size="small"
-                  class="clickable-tag"
-                  @click="goTagSearch(tag)"
-                >
-                  {{ tag }}
-                </el-tag>
-                <span v-if="tags.length === 0" class="empty">暂无关键词</span>
+                <div class="meta-row">
+                  <span class="dot" />分享时间
+                  <span class="value">{{ formatDate(data.share_at || data.created_at) }}</span>
+                </div>
+                <div class="meta-row">
+                  <span class="dot" />收录时间
+                  <span class="value">{{ formatDate(data.created_at) }}</span>
+                </div>
+                <div class="meta-row">
+                  <span class="dot" />网盘平台
+                  <span class="value">{{ platformSummary }}</span>
+                </div>
+                <div class="meta-row tags-row">
+                  <span class="dot" />关键词标签
+                  <div class="tags">
+                    <el-tag
+                      v-for="tag in tags"
+                      :key="tag"
+                      effect="light"
+                      size="small"
+                      class="clickable-tag"
+                      @click="goTagSearch(tag)"
+                    >
+                      {{ tag }}
+                    </el-tag>
+                    <span v-if="tags.length === 0" class="empty">暂无关键词</span>
+                  </div>
+                </div>
+
+                <div class="bottom-actions">
+                  <div ref="actionButtonsMount" class="bottom-actions-mount" />
+                </div>
+
+                <div class="action-area">
+                  <div class="tip-box">
+                    <strong>温馨提示</strong>
+                    如遇网盘资源失效或其他问题，请点击上方「查看资源 / 反馈问题」按钮向我们反馈。
+                  </div>
+                </div>
               </div>
-            </div>
-
-            <div class="action-area">
-              <div class="tip-box">
-                <strong>温馨提示</strong>
-                如遇网盘资源失效或其他问题，请点击下方「反馈问题」向我们反馈。
-              </div>
-              <div class="qr-box">
-                <img v-if="qrDataUrl" :src="qrDataUrl" alt="二维码" />
-                <div v-else class="qr-placeholder">生成中…</div>
-                <span>扫码保存链接</span>
-              </div>
-            </div>
-
-            <div class="bottom-actions">
-              <div ref="actionButtonsMount" class="bottom-actions-mount" />
             </div>
           </el-card>
 
@@ -836,6 +844,64 @@ watch(
   border-top: 3px solid var(--el-color-primary);
 }
 
+.detail-layout {
+  display: grid;
+  grid-template-columns: 248px minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.poster-col {
+  display: grid;
+  gap: 12px;
+  align-self: start;
+}
+
+.poster-box {
+  margin-bottom: 0;
+}
+
+.poster-image {
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  max-height: unset;
+  object-fit: cover;
+}
+
+.poster-placeholder {
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 10px;
+  background: var(--el-fill-color-light);
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.poster-qr {
+  margin-top: 4px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.poster-qr img {
+  width: 110px;
+  height: 110px;
+  object-fit: cover;
+}
+
+.info-col {
+  min-width: 0;
+}
+
 .label-row {
   display: flex;
   gap: 8px;
@@ -1176,12 +1242,25 @@ watch(
     grid-template-columns: 1fr;
   }
 
+  .detail-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .poster-col {
+    grid-template-columns: minmax(0, 240px) 1fr;
+    align-items: start;
+  }
+
   .bottom-grid {
     grid-template-columns: 1fr;
   }
 }
 
 @media (max-width: 640px) {
+  .poster-col {
+    grid-template-columns: 1fr;
+  }
+
   .title {
     font-size: 24px;
     -webkit-line-clamp: 3;

@@ -40,6 +40,7 @@ type publicSystemConfig struct {
 	FriendLinks                []FriendLinkItem `json:"friend_links"`
 	DoubanHotNavEnabled        bool             `json:"douban_hot_nav_enabled"`
 	HotSearchEnabled           bool             `json:"hot_search_enabled"`
+	ShowSiteTitle              bool             `json:"show_site_title"`
 	HomeRankBoardEnabled       bool             `json:"home_rank_board_enabled"`
 	DoubanCoverProxyURL        string           `json:"douban_cover_proxy_url"`
 	TgImageProxyURL            string           `json:"tg_image_proxy_url"`
@@ -143,6 +144,7 @@ func GetPublicSystemConfig(c *gin.Context) {
 		FriendLinks:                links,
 		DoubanHotNavEnabled:        cfg.DoubanHotNavEnabled,
 		HotSearchEnabled:           cfg.HotSearchEnabled,
+		ShowSiteTitle:              cfg.ShowSiteTitle,
 		HomeRankBoardEnabled:       cfg.HomeRankBoardEnabled,
 		DoubanCoverProxyURL:        cfg.DoubanCoverProxyURL,
 		TgImageProxyURL:            cfg.TgImageProxyURL,
@@ -171,6 +173,7 @@ func GetPublicSystemConfig(c *gin.Context) {
 		FriendLinks:                links,
 		DoubanHotNavEnabled:        cfg.DoubanHotNavEnabled,
 		HotSearchEnabled:           cfg.HotSearchEnabled,
+		ShowSiteTitle:              cfg.ShowSiteTitle,
 		HomeRankBoardEnabled:       cfg.HomeRankBoardEnabled,
 		DoubanCoverProxyURL:        cfg.DoubanCoverProxyURL,
 		TgImageProxyURL:            cfg.TgImageProxyURL,
@@ -252,6 +255,7 @@ func UpdateSystemConfig(c *gin.Context) {
 		"link_check_interval":           req.LinkCheckInterval,
 		"douban_hot_nav_enabled":        req.DoubanHotNavEnabled,
 		"hot_search_enabled":            req.HotSearchEnabled,
+		"show_site_title":               req.ShowSiteTitle,
 		"home_rank_board_enabled":       req.HomeRankBoardEnabled,
 		"douban_cover_proxy_url":        req.DoubanCoverProxyURL,
 		"tg_image_proxy_url":            req.TgImageProxyURL,

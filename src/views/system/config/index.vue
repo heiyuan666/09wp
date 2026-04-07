@@ -100,6 +100,10 @@
         <el-switch v-model="form.hot_search_enabled" />
         <span class="item-desc">关闭后首页不再展示热搜词标签区。</span>
       </el-form-item>
+      <el-form-item label="显示站点名称">
+        <el-switch v-model="form.show_site_title" />
+        <span class="item-desc">控制前台左上角品牌区是否显示网站名称（仅保留 Logo 时更简洁）。</span>
+      </el-form-item>
       <el-form-item label="首页显示排行榜">
         <el-switch v-model="form.home_rank_board_enabled" />
         <span class="item-desc">含热门资源、最新资源、豆瓣热门；关闭后可减少首页请求。</span>
@@ -262,6 +266,7 @@ const form = reactive<ISystemConfig>({
   link_check_interval: 3600,
   douban_hot_nav_enabled: false,
   hot_search_enabled: true,
+  show_site_title: true,
   home_rank_board_enabled: true,
   douban_cover_proxy_url: '',
   tg_image_proxy_url: '',
@@ -313,6 +318,7 @@ const save = async () => {
       friendLinks: [...(form.friend_links || [])],
       doubanHotNavEnabled: form.douban_hot_nav_enabled ?? false,
       hotSearchEnabled: form.hot_search_enabled ?? true,
+      showSiteTitle: form.show_site_title ?? true,
       homeRankBoardEnabled: form.home_rank_board_enabled ?? true,
       doubanCoverProxyUrl: form.douban_cover_proxy_url || '',
       tgImageProxyUrl: form.tg_image_proxy_url || '',

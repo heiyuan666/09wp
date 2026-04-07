@@ -11,6 +11,7 @@ export type PublicConfig = {
   footer_text: string
   allow_register: boolean
   hot_search_enabled?: boolean
+  show_site_title?: boolean
   /** 首页是否展示排行榜（热门资源 / 最新资源 / 豆瓣热门） */
   home_rank_board_enabled?: boolean
   friend_links?: Array<{ title: string; url: string }>
@@ -66,5 +67,6 @@ export const defaultConfig: PublicConfig = {
   footer_text: '©09cdn www.09cdn.com',
   allow_register: true,
   hot_search_enabled: true,
+  show_site_title: true,
   home_rank_board_enabled: true,
 }

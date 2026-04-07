@@ -61,6 +61,16 @@ export default defineConfig(({ mode }) => {
       port: 3007,
       open: true,
       proxy: {
+        // 本地未配 VITE_API_BASE_URL 时请求 /api/v1 → 走后端，避免 /public/* 与 Vite public 目录混淆
+        '/api': {
+          target: backendRootURL,
+          changeOrigin: true,
+        },
+        // 后端静态资源（封面/导出文件等）
+        '/public': {
+          target: backendRootURL,
+          changeOrigin: true,
+        },
         // 让 crawlers/浏览器直接访问站点根目录的 sitemap/rss
         '/sitemap.xml': {
           target: backendRootURL,

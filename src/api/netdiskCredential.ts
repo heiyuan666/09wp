@@ -51,6 +51,8 @@ export interface INetdiskCredential {
   aliyun_refresh_token?: string
   /** 多账号 refresh_token 轮询；cookie 字段填 token 文本 */
   aliyun_refresh_token_accounts?: INetdiskCookieAccount[]
+  /** OpenList 等提供的 renewapi：用于续期 access_token（可选） */
+  aliyun_renew_api_url?: string
   aliyun_auto_save?: boolean
   aliyun_target_parent_file_id?: string
   /** 转存成功后是否将资源链接替换为您本人网盘生成的分享链接（各已接入网盘均会尝试） */

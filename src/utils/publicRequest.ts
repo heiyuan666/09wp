@@ -1,9 +1,10 @@
 import axios, { type AxiosInstance, type AxiosRequestConfig, type AxiosResponse } from 'axios'
 import { ElMessage } from 'element-plus'
+import { API_BASE_URL } from '@/config/app.config'
 
 // 给“前台站点”用的请求实例：使用 user_token，不影响后台管理 token
 const service: AxiosInstance = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL,
+  baseURL: API_BASE_URL,
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json;charset=UTF-8',

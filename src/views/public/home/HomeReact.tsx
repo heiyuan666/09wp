@@ -45,7 +45,7 @@ export default function HomeReact() {
           <div className={styles.headerInner}>
             <a className={styles.brand} href="/">
               {logoNode}
-              <span className={styles.brandTitle}>{siteTitle}</span>
+              {config.show_site_title !== false ? <span className={styles.brandTitle}>{siteTitle}</span> : null}
             </a>
 
             <nav className={styles.nav} aria-label="顶部导航">
