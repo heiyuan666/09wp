@@ -158,6 +158,13 @@
         />
         <span class="item-desc">当服务器无法直连 TMDB 时可填写；仅影响 TMDB 请求。</span>
       </el-form-item>
+      <el-form-item label="IYUNS 接口地址">
+        <el-input
+          v-model="form.iyuns_api_base_url"
+          placeholder="默认：https://api.iyuns.com"
+        />
+        <span class="item-desc">用于豆瓣检索（wpysso）和详情（dbys）接口基地址。</span>
+      </el-form-item>
 
       <el-divider content-position="left">链接有效性检查</el-divider>
       <el-form-item label="自动删除无效链接">
@@ -340,6 +347,7 @@ const form = reactive<ISystemConfig>({
   tg_image_proxy_url: '',
   tmdb_bearer_token: '',
   tmdb_proxy_url: '',
+  iyuns_api_base_url: 'https://api.iyuns.com',
   auto_delete_invalid_links: false,
   hide_invalid_links_in_search: false,
 })

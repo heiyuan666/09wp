@@ -55,6 +55,7 @@ func AutoMigrate() error {
 		&model.SearchHotWord{},
 		&model.NavigationMenu{},
 		&model.TMDBSearchCache{},
+		&model.DoubanSearchCache{},
 		&model.NetdiskCredential{},
 		&model.ResourceFeedback{},
 		&model.RSSSubscription{},
@@ -131,6 +132,11 @@ func ensureRequiredColumns() error {
 	}
 	if !m.HasColumn(&model.SystemConfig{}, "TMDBProxyURL") {
 		if err := m.AddColumn(&model.SystemConfig{}, "TMDBProxyURL"); err != nil {
+			return err
+		}
+	}
+	if !m.HasColumn(&model.SystemConfig{}, "IYunsAPIBaseURL") {
+		if err := m.AddColumn(&model.SystemConfig{}, "IYunsAPIBaseURL"); err != nil {
 			return err
 		}
 	}
@@ -240,6 +246,7 @@ func ensureRequiredColumns() error {
 		{"system_configs", "clarity_enabled", "ALTER TABLE system_configs ADD COLUMN clarity_enabled tinyint(1) NOT NULL DEFAULT 0"},
 		{"system_configs", "tmdb_bearer_token", "ALTER TABLE system_configs ADD COLUMN tmdb_bearer_token varchar(600) NOT NULL DEFAULT ''"},
 		{"system_configs", "tmdb_proxy_url", "ALTER TABLE system_configs ADD COLUMN tmdb_proxy_url varchar(500) NOT NULL DEFAULT ''"},
+		{"system_configs", "iyuns_api_base_url", "ALTER TABLE system_configs ADD COLUMN iyuns_api_base_url varchar(255) NOT NULL DEFAULT 'https://api.iyuns.com'"},
 		{"system_configs", "footer_quick_links", "ALTER TABLE system_configs ADD COLUMN footer_quick_links text NOT NULL"},
 		{"system_configs", "footer_hot_platforms", "ALTER TABLE system_configs ADD COLUMN footer_hot_platforms text NOT NULL"},
 		{"system_configs", "footer_social_links", "ALTER TABLE system_configs ADD COLUMN footer_social_links text NOT NULL"},
@@ -309,6 +316,9 @@ func ensureRequiredColumns() error {
 	_ = DB().Exec(
 		"UPDATE system_configs SET pancheck_base_url = ? WHERE pancheck_base_url = '' OR pancheck_base_url IS NULL",
 		config.DefaultPanCheckBaseURL,
+	).Error
+	_ = DB().Exec(
+		"UPDATE system_configs SET iyuns_api_base_url = 'https://api.iyuns.com' WHERE iyuns_api_base_url = '' OR iyuns_api_base_url IS NULL",
 	).Error
 	return nil
 }

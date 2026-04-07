@@ -327,6 +327,7 @@ func UpdateSystemConfig(c *gin.Context) {
 		"tg_image_proxy_url":            req.TgImageProxyURL,
 		"tmdb_bearer_token":             strings.TrimSpace(req.TMDBBearerToken),
 		"tmdb_proxy_url":                strings.TrimSpace(req.TMDBProxyURL),
+		"iyuns_api_base_url":            strings.TrimSpace(req.IYunsAPIBaseURL),
 		"auto_delete_invalid_links":     req.AutoDeleteInvalidLinks,
 		"hide_invalid_links_in_search":  req.HideInvalidLinksInSearch,
 		"tg_channel_chat_id":            req.TgChannelChatID,

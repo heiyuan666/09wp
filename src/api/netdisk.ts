@@ -156,6 +156,20 @@ export const siteTMDBSearch = (params: { q: string }) =>
     params,
   })
 
+export type IDoubanInfoItem = {
+  title: string
+  overview?: string
+  poster?: string
+  year?: string
+  rating?: string
+  url?: string
+}
+
+export const siteDoubanInfoSearch = (params: { q: string }) =>
+  publicRequest.get<ICommonResponse<{ enabled: boolean; item: IDoubanInfoItem | null }>>('/public/douban/search', {
+    params,
+  })
+
 /** 热搜榜，来自用户真实搜索统计。 */
 export const siteHotSearch = (params?: { limit?: number }) =>
   publicRequest.get<ICommonResponse<{ list: { keyword: string; search_count: number }[] }>>(

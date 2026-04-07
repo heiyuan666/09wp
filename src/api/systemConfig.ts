@@ -63,6 +63,8 @@ export interface ISystemConfig {
   tmdb_bearer_token?: string
   /** TMDB 请求代理地址（可选），如 http://127.0.0.1:7890 */
   tmdb_proxy_url?: string
+  /** 豆瓣聚合接口基地址（默认 https://api.iyuns.com） */
+  iyuns_api_base_url?: string
   footer_quick_links?: IFriendLinkItem[]
   footer_hot_platforms?: string[]
   footer_social_links?: IFriendLinkItem[]
