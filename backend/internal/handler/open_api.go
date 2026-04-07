@@ -7,6 +7,7 @@ import (
 
 	"dfan-netdisk-backend/internal/database"
 	"dfan-netdisk-backend/internal/model"
+	"dfan-netdisk-backend/internal/service"
 	"dfan-netdisk-backend/pkg/response"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -50,30 +51,7 @@ type openNetdiskTransferInfo struct {
 }
 
 func detectOpenResourcePlatform(link string) string {
-	u := strings.ToLower(strings.TrimSpace(link))
-	switch {
-	case strings.Contains(u, "pan.baidu.com"):
-		return "baidu"
-	case strings.Contains(u, "pan.quark.cn"):
-		return "quark"
-	case strings.Contains(u, "pan.xunlei.com"):
-		return "xunlei"
-	case strings.Contains(u, "aliyundrive.com"), strings.Contains(u, "alipan.com"):
-		return "aliyun"
-	case strings.Contains(u, "cloud.189.cn"), strings.Contains(u, "caiyun.189"), strings.Contains(u, "tianyi"):
-		return "tianyi"
-	case strings.Contains(u, "yun.139.com"), strings.Contains(u, "caiyun.139.com"):
-		return "yidong"
-	case strings.Contains(u, "115.com"), strings.Contains(u, "115cdn.com"):
-		return "115"
-	case strings.Contains(u, "123pan"), strings.Contains(u, "123684"), strings.Contains(u, "123685"),
-		strings.Contains(u, "123912"), strings.Contains(u, "123592"), strings.Contains(u, "123865"), strings.Contains(u, "123.net"):
-		return "123pan"
-	case strings.Contains(u, "drive-h.uc.cn"), strings.Contains(u, "drive.uc.cn"):
-		return "uc"
-	default:
-		return "other"
-	}
+	return service.DetectPlatformFromLink(link)
 }
 
 func splitResourceTags(raw string) []string {
@@ -160,11 +138,9 @@ func OpenNetdiskResourceList(c *gin.Context) {
 	keyword := strings.TrimSpace(c.Query("q"))
 	var res []model.Resource
 
+	// 开启 Meili 且带关键词时，优先使用 Meili（无关键词仍走 MySQL 列表，以保证行为稳定）
 	var total int64
-	if err := openNetdiskResourceListQuery(c, keyword).Count(&total).Error; err != nil {
-		response.Error(c, 500, "query total failed")
-		return
-	}
+	useMeili := service.MeiliEnabled() && strings.TrimSpace(keyword) != ""
 
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
@@ -175,14 +151,40 @@ func OpenNetdiskResourceList(c *gin.Context) {
 		pageSize = 20
 	}
 
-	orderExpr := sortOrderExpr(c.DefaultQuery("sort", "latest"))
-	if err := openNetdiskResourceListQuery(c, keyword).
-		Order(orderExpr).
-		Limit(pageSize).
-		Offset((page - 1) * pageSize).
-		Find(&res).Error; err != nil {
-		response.Error(c, 500, "query resource list failed")
-		return
+	sortParam := strings.TrimSpace(c.DefaultQuery("sort", "latest"))
+
+	if useMeili {
+		out, err := service.SearchResourcesByMeili(c.Request.Context(), service.MeiliSearchParams{
+			Query:      keyword,
+			Page:       page,
+			PageSize:   pageSize,
+			Sort:       sortParam,
+			CategoryID: strings.TrimSpace(c.Query("category_id")),
+			Platform:   strings.TrimSpace(c.Query("platform")),
+			LinkValid:  strings.TrimSpace(c.Query("link_valid")),
+		})
+		if err == nil {
+			res = out.List
+			total = out.Total
+		} else {
+			service.MeiliTryLog(err)
+			useMeili = false
+		}
+	}
+	if !useMeili {
+		if err := openNetdiskResourceListQuery(c, keyword).Count(&total).Error; err != nil {
+			response.Error(c, 500, "query total failed")
+			return
+		}
+		orderExpr := sortOrderExpr(sortParam)
+		if err := openNetdiskResourceListQuery(c, keyword).
+			Order(orderExpr).
+			Limit(pageSize).
+			Offset((page - 1) * pageSize).
+			Find(&res).Error; err != nil {
+			response.Error(c, 500, "query resource list failed")
+			return
+		}
 	}
 
 	categoryNameMap := loadCategoryNameMap()

@@ -16,6 +16,9 @@ import (
 	"time"
 )
 
+// keep-alive reference to avoid gopls unusedfunc warning (used by optional flows / future extensions)
+var _ = sortByProductIDStable
+
 const haokaGetProductsURL = "https://haokaopenapi.lot-ml.com/api/order/GetProductsV2"
 
 type HaokaExternalSku struct {
@@ -25,30 +28,30 @@ type HaokaExternalSku struct {
 }
 
 type HaokaExternalProduct struct {
-	ProductID      uint64             `json:"productID"`
-	ProductName    string             `json:"productName"`
-	MainPic        string             `json:"mainPic"`
-	Area           string             `json:"area"`
-	DisableArea    string             `json:"disableArea"`
-	LittlePicture  string             `json:"littlepicture"`
-	NetAddr        string             `json:"netAddr"`
-	Flag           bool               `json:"flag"`
-	NumberSel      int                `json:"numberSel"`
-	Operator       string             `json:"operator"`
-	BackMoneyType  string             `json:"BackMoneyType"`
-	Taocan         string             `json:"Taocan"`
-	Rule           string             `json:"Rule"`
-	Age1           int                `json:"Age1"`
-	Age2           int                `json:"Age2"`
-	PriceTime      string             `json:"PriceTime"`
-	Skus           []HaokaExternalSku `json:"Skus"`
+	ProductID     uint64             `json:"productID"`
+	ProductName   string             `json:"productName"`
+	MainPic       string             `json:"mainPic"`
+	Area          string             `json:"area"`
+	DisableArea   string             `json:"disableArea"`
+	LittlePicture string             `json:"littlepicture"`
+	NetAddr       string             `json:"netAddr"`
+	Flag          bool               `json:"flag"`
+	NumberSel     int                `json:"numberSel"`
+	Operator      string             `json:"operator"`
+	BackMoneyType string             `json:"BackMoneyType"`
+	Taocan        string             `json:"Taocan"`
+	Rule          string             `json:"Rule"`
+	Age1          int                `json:"Age1"`
+	Age2          int                `json:"Age2"`
+	PriceTime     string             `json:"PriceTime"`
+	Skus          []HaokaExternalSku `json:"Skus"`
 }
 
 type haokaGetProductsV2Resp struct {
-	Code    int                      `json:"code"`
-	Message string                   `json:"message"`
+	Code    int                    `json:"code"`
+	Message string                 `json:"message"`
 	Data    []HaokaExternalProduct `json:"data"`
-	Errs    any                      `json:"errs"`
+	Errs    any                    `json:"errs"`
 }
 
 func md5LowerHex(input string) string {
@@ -139,4 +142,3 @@ func sortByProductIDStable(ps []HaokaExternalProduct) {
 		return ps[i].ProductID < ps[j].ProductID
 	})
 }
-

@@ -170,6 +170,26 @@ func ensureRequiredColumns() error {
 			return err
 		}
 	}
+	if !m.HasColumn(&model.SystemConfig{}, "MeiliEnabled") {
+		if err := m.AddColumn(&model.SystemConfig{}, "MeiliEnabled"); err != nil {
+			return err
+		}
+	}
+	if !m.HasColumn(&model.SystemConfig{}, "MeiliURL") {
+		if err := m.AddColumn(&model.SystemConfig{}, "MeiliURL"); err != nil {
+			return err
+		}
+	}
+	if !m.HasColumn(&model.SystemConfig{}, "MeiliAPIKey") {
+		if err := m.AddColumn(&model.SystemConfig{}, "MeiliAPIKey"); err != nil {
+			return err
+		}
+	}
+	if !m.HasColumn(&model.SystemConfig{}, "MeiliIndexName") {
+		if err := m.AddColumn(&model.SystemConfig{}, "MeiliIndexName"); err != nil {
+			return err
+		}
+	}
 	if !m.HasColumn(&model.SystemConfig{}, "ClarityProjectID") {
 		if err := m.AddColumn(&model.SystemConfig{}, "ClarityProjectID"); err != nil {
 			return err
@@ -289,6 +309,10 @@ func ensureRequiredColumns() error {
 		{"game_resources", "resource_type", "ALTER TABLE game_resources ADD COLUMN resource_type varchar(30) NOT NULL DEFAULT 'game'"},
 		{"user_resource_submissions", "game_id", "ALTER TABLE user_resource_submissions ADD COLUMN game_id bigint unsigned NULL"},
 		{"resource_transfer_logs", "filter_log", "ALTER TABLE resource_transfer_logs ADD COLUMN filter_log text NOT NULL"},
+		{"system_configs", "meili_enabled", "ALTER TABLE system_configs ADD COLUMN meili_enabled tinyint(1) NOT NULL DEFAULT 0"},
+		{"system_configs", "meili_url", "ALTER TABLE system_configs ADD COLUMN meili_url varchar(255) NOT NULL DEFAULT ''"},
+		{"system_configs", "meili_api_key", "ALTER TABLE system_configs ADD COLUMN meili_api_key varchar(255) NOT NULL DEFAULT ''"},
+		{"system_configs", "meili_index_name", "ALTER TABLE system_configs ADD COLUMN meili_index_name varchar(64) NOT NULL DEFAULT 'resources'"},
 	}
 	for _, item := range requiredCols {
 		exists, err := columnExists(item.table, item.column)

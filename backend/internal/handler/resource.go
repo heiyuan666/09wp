@@ -116,10 +116,15 @@ func resourceSearchQuery(c *gin.Context, blocks []string, keywordNorm string) *g
 	}
 
 	phraseLike := "%" + keywordNorm + "%"
-	q = q.Where(
-		"(title LIKE ? OR description LIKE ? OR tags LIKE ?)",
-		phraseLike, phraseLike, phraseLike,
-	)
+
+	// 现有逻辑：整句 + 按空格分段（AND）匹配。对中文（无空格）时命中面偏窄。
+	//
+	// 优化：当 keywordNorm 不含空格时，引入 TokenizeSearchQuery 的 bigram/token 命中阈值，
+	// 作为“模糊匹配”兜底（OR），提升中文/长词的召回。
+	basePhraseSQL := "(title LIKE ? OR description LIKE ? OR tags LIKE ?)"
+	basePhraseArgs := []any{phraseLike, phraseLike, phraseLike}
+
+	// 空格分段（AND），用于用户显式输入多个关键词的场景
 	for _, part := range strings.Fields(keywordNorm) {
 		part = strings.TrimSpace(part)
 		if part == "" || part == keywordNorm {
@@ -130,6 +135,53 @@ func resourceSearchQuery(c *gin.Context, blocks []string, keywordNorm string) *g
 			"(title LIKE ? OR description LIKE ? OR tags LIKE ?)",
 			partLike, partLike, partLike,
 		)
+	}
+
+	// bigram/token 模糊匹配：仅在“无空格”时启用，避免把用户多关键词语义稀释成泛匹配
+	if !strings.Contains(keywordNorm, " ") {
+		tokens := service.TokenizeSearchQuery(keywordNorm)
+		// token 较多时，设一个命中阈值，避免 OR 过于宽泛；并限制 token 数量防止 SQL 过大
+		if len(tokens) > 0 {
+			if len(tokens) > 8 {
+				tokens = tokens[:8]
+			}
+			// 2 是一个相对保守的阈值：避免单个 bigram 命中过泛（如“资源”“合集”）。
+			minHits := 2
+			// 若输入本身很短（<=2 rune），用 token 会过泛，直接依赖 phrase 匹配即可
+			if len([]rune(keywordNorm)) <= 2 {
+				minHits = 999
+			}
+
+			if minHits < 999 {
+				parts := make([]string, 0, len(tokens))
+				args := make([]any, 0, len(tokens)*3+1)
+				for _, t := range tokens {
+					t = strings.TrimSpace(t)
+					if t == "" {
+						continue
+					}
+					like := "%" + t + "%"
+					// MySQL: IF(condition,1,0) 可用于累计命中数
+					parts = append(parts, "IF((title LIKE ? OR description LIKE ? OR tags LIKE ?),1,0)")
+					args = append(args, like, like, like)
+				}
+				if len(parts) > 0 {
+					fuzzySQL := "(" + strings.Join(parts, " + ") + ") >= ?"
+					args = append(args, minHits)
+					// 整句匹配 OR bigram/token 命中阈值
+					q = q.Where("("+basePhraseSQL+" OR "+fuzzySQL+")", append(basePhraseArgs, args...)...)
+				} else {
+					q = q.Where(basePhraseSQL, basePhraseArgs...)
+				}
+			} else {
+				q = q.Where(basePhraseSQL, basePhraseArgs...)
+			}
+		} else {
+			q = q.Where(basePhraseSQL, basePhraseArgs...)
+		}
+	} else {
+		// 有空格：保持“多关键词 AND”语义，同时也要保证整句可命中
+		q = q.Where(basePhraseSQL, basePhraseArgs...)
 	}
 
 	for _, w := range blocks {
@@ -240,6 +292,7 @@ func AdminResourceCreate(c *gin.Context) {
 		}(res.ID)
 	}
 
+	service.MeiliUpsertResourceAsync(res.ID)
 	response.OK(c, res)
 }
 
@@ -332,6 +385,10 @@ func AdminResourceUpdate(c *gin.Context) {
 		response.Error(c, 500, "更新失败")
 		return
 	}
+	service.MeiliUpsertResourceAsync(func() uint64 {
+		n, _ := strconv.ParseUint(strings.TrimSpace(id), 10, 64)
+		return n
+	}())
 	response.OK(c, nil)
 }
 
@@ -342,6 +399,10 @@ func AdminResourceDelete(c *gin.Context) {
 		response.Error(c, 500, "删除失败")
 		return
 	}
+	service.MeiliDeleteResourceAsync(func() uint64 {
+		n, _ := strconv.ParseUint(strings.TrimSpace(id), 10, 64)
+		return n
+	}())
 	response.OK(c, nil)
 }
 
@@ -647,30 +708,53 @@ func ResourceSearch(c *gin.Context) {
 		}
 	}
 
+	// Meilisearch：若开启则优先使用（屏蔽词存在时先走 MySQL，避免 Meili 无法表达 NOT LIKE 语义）
 	var total int64
-	if err := resourceSearchQuery(c, blocks, keywordNorm).Count(&total).Error; err != nil {
-		response.Error(c, 500, "统计失败")
-		return
-	}
-
-	listTx := resourceSearchQuery(c, blocks, keywordNorm).Limit(pageSize).Offset((page - 1) * pageSize)
-	switch sortParam {
-	case "latest":
-		listTx = listTx.Order(sortOrderExpr("latest"))
-	case "hot":
-		listTx = listTx.Order(sortOrderExpr("hot"))
-	default:
-		relevanceOrderSQL, relevanceArgs := buildSearchRelevanceOrder(keywordNorm, tokens)
-		listTx = listTx.Clauses(clause.OrderBy{
-			Expression: clause.Expr{
-				SQL:  relevanceOrderSQL,
-				Vars: relevanceArgs,
-			},
+	useMeili := service.MeiliEnabled() && len(blocks) == 0
+	if useMeili {
+		out, err := service.SearchResourcesByMeili(context.Background(), service.MeiliSearchParams{
+			Query:       keywordNorm,
+			Page:        page,
+			PageSize:    pageSize,
+			Sort:        sortParam,
+			CategoryID:  strings.TrimSpace(c.Query("category_id")),
+			Platform:    strings.TrimSpace(c.Query("platform")),
+			LinkValid:   strings.TrimSpace(c.Query("link_valid")),
+			HideInvalid: hideInvalidInSearch,
 		})
+		if err == nil {
+			res = out.List
+			total = out.Total
+		} else {
+			service.MeiliTryLog(err)
+			useMeili = false
+		}
 	}
-	if err := listTx.Find(&res).Error; err != nil {
-		response.Error(c, 500, "查询失败")
-		return
+	if !useMeili {
+		if err := resourceSearchQuery(c, blocks, keywordNorm).Count(&total).Error; err != nil {
+			response.Error(c, 500, "统计失败")
+			return
+		}
+
+		listTx := resourceSearchQuery(c, blocks, keywordNorm).Limit(pageSize).Offset((page - 1) * pageSize)
+		switch sortParam {
+		case "latest":
+			listTx = listTx.Order(sortOrderExpr("latest"))
+		case "hot":
+			listTx = listTx.Order(sortOrderExpr("hot"))
+		default:
+			relevanceOrderSQL, relevanceArgs := buildSearchRelevanceOrder(keywordNorm, tokens)
+			listTx = listTx.Clauses(clause.OrderBy{
+				Expression: clause.Expr{
+					SQL:  relevanceOrderSQL,
+					Vars: relevanceArgs,
+				},
+			})
+		}
+		if err := listTx.Find(&res).Error; err != nil {
+			response.Error(c, 500, "查询失败")
+			return
+		}
 	}
 
 	if raw, err := json.Marshal(searchCachePage{List: res, Total: total}); err == nil {
@@ -724,4 +808,3 @@ func AdminResourceCheckLinks(c *gin.Context) {
 		"details":       stats.Details,
 	})
 }
-

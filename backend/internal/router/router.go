@@ -135,6 +135,8 @@ func SetupRouter(jwtSecret string) *gin.Engine {
 	{
 		systemConfig.GET("", handler.GetSystemConfig)
 		systemConfig.PUT("", handler.UpdateSystemConfig)
+		systemConfig.POST("/meili/test", handler.AdminMeiliTest)
+		systemConfig.POST("/meili/reindex", handler.AdminMeiliReindex)
 	}
 
 	netdiskCred := api.Group("/system/netdisk-credentials")

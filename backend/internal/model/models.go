@@ -44,24 +44,24 @@ type Category struct {
 
 // Resource 网盘资源表
 type Resource struct {
-	ID                 uint64     `gorm:"primaryKey" json:"id"`
-	Title              string     `gorm:"size:200;not null" json:"title"`
-	Link               string     `gorm:"size:500;not null" json:"link"`
+	ID                 uint64         `gorm:"primaryKey" json:"id"`
+	Title              string         `gorm:"size:200;not null" json:"title"`
+	Link               string         `gorm:"size:500;not null" json:"link"`
 	ExtraLinks         JSONStringList `gorm:"type:text;column:extra_links" json:"extra_links"` // 其它网盘分享链接（JSON 数组），主链接见 link
-	CategoryID         uint64     `gorm:"index;not null" json:"category_id"`
-	Source             string     `gorm:"size:30;default:'';index" json:"source"`             // 来源：manual/telegram
-	ExternalID         string     `gorm:"size:120;default:'';index" json:"external_id"` // 外部 ID（TG/RSS 等）去重在业务层校验；库内勿对 '' 做唯一索引
-	Description        string     `gorm:"type:text" json:"description"`
-	ExtractCode        string     `gorm:"size:50" json:"extract_code"`
-	Cover              string     `gorm:"size:2048" json:"cover"` // 外链封面（如 telesco.pe）可能极长
-	Tags               string     `gorm:"size:255" json:"tags"`                 // 逗号分隔
-	LinkValid          bool       `gorm:"default:true;index" json:"link_valid"` // 链接检测是否有效
-	LinkCheckMsg       string     `gorm:"size:255;default:''" json:"link_check_msg"`
-	LinkCheckedAt      *time.Time `json:"link_checked_at,omitempty"`
-	TransferStatus     string     `gorm:"size:20;default:'';index" json:"transfer_status"` // pending/success/failed
-	TransferMsg        string     `gorm:"size:255;default:''" json:"transfer_msg"`
-	TransferRetryCount int        `gorm:"default:0" json:"transfer_retry_count"`
-	TransferLastAt     *time.Time `json:"transfer_last_at,omitempty"`
+	CategoryID         uint64         `gorm:"index;not null" json:"category_id"`
+	Source             string         `gorm:"size:30;default:'';index" json:"source"`       // 来源：manual/telegram
+	ExternalID         string         `gorm:"size:120;default:'';index" json:"external_id"` // 外部 ID（TG/RSS 等）去重在业务层校验；库内勿对 '' 做唯一索引
+	Description        string         `gorm:"type:text" json:"description"`
+	ExtractCode        string         `gorm:"size:50" json:"extract_code"`
+	Cover              string         `gorm:"size:2048" json:"cover"`               // 外链封面（如 telesco.pe）可能极长
+	Tags               string         `gorm:"size:255" json:"tags"`                 // 逗号分隔
+	LinkValid          bool           `gorm:"default:true;index" json:"link_valid"` // 链接检测是否有效
+	LinkCheckMsg       string         `gorm:"size:255;default:''" json:"link_check_msg"`
+	LinkCheckedAt      *time.Time     `json:"link_checked_at,omitempty"`
+	TransferStatus     string         `gorm:"size:20;default:'';index" json:"transfer_status"` // pending/success/failed
+	TransferMsg        string         `gorm:"size:255;default:''" json:"transfer_msg"`
+	TransferRetryCount int            `gorm:"default:0" json:"transfer_retry_count"`
+	TransferLastAt     *time.Time     `json:"transfer_last_at,omitempty"`
 	// idx_res_pub_hot: 前台 WHERE status=1 ORDER BY view_count（InnoDB 二级索引叶子含主键 id）
 	ViewCount uint64 `gorm:"default:0;index:idx_res_pub_hot,priority:2" json:"view_count"`
 	SortOrder int    `gorm:"default:0" json:"sort_order"`
@@ -237,10 +237,16 @@ type SystemConfig struct {
 
 	// HideInvalidLinksInSearch 是否在前台搜索中隐藏失效链接资源
 	// 若开启且请求未显式传 link_valid 参数，则强制 link_valid = true
-	HideInvalidLinksInSearch bool      `gorm:"default:false" json:"hide_invalid_links_in_search"`
-	UpdatedBy                uint64    `gorm:"default:0" json:"updated_by"`
-	CreatedAt                time.Time `json:"created_at"`
-	UpdatedAt                time.Time `json:"updated_at"`
+	HideInvalidLinksInSearch bool `gorm:"default:false" json:"hide_invalid_links_in_search"`
+
+	// Meilisearch：可选搜索引擎开关（开启则搜索优先走 Meili，失败自动回退 MySQL）
+	MeiliEnabled   bool      `gorm:"default:false" json:"meili_enabled"`
+	MeiliURL       string    `gorm:"size:255;default:''" json:"meili_url"`
+	MeiliAPIKey    string    `gorm:"size:255;default:''" json:"meili_api_key"`
+	MeiliIndexName string    `gorm:"size:64;default:'resources'" json:"meili_index"`
+	UpdatedBy      uint64    `gorm:"default:0" json:"updated_by"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
 }
 
 // NavigationMenu 前台导航菜单（用于顶部导航 / 首页推荐按钮）

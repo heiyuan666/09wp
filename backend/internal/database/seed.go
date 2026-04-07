@@ -360,6 +360,10 @@ func SeedSystemConfig() error {
 		TgImageProxyURL:            "",
 		AutoDeleteInvalidLinks:     false,
 		HideInvalidLinksInSearch:   false,
+		MeiliEnabled:               false,
+		MeiliURL:                   "http://127.0.0.1:7700",
+		MeiliAPIKey:                "",
+		MeiliIndexName:             "resources",
 		UpdatedBy:                  0,
 	}
 	return DB().Create(&cfg).Error

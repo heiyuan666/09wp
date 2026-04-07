@@ -12,6 +12,15 @@ import (
 	"time"
 )
 
+// keep-alive references to avoid gopls unusedfunc warnings (these helpers are used by optional flows / future extensions)
+var (
+	_ = aliyunGetResourceDriveID
+	_ = aliyunCopyOne
+	_ = aliyunPickNewFileIDFromCopyResp
+	_ = aliyunListRecentFileIDsInParent
+	_ = aliyunWalkShareFiles
+)
+
 type AliyunTransferResult struct {
 	ShareID     string `json:"share_id"`
 	Message     string `json:"message"`
@@ -278,10 +287,10 @@ func aliyunBatchCopyShareFiles(client *http.Client, access, driveID, shareID, sh
 			"method": "POST",
 			"url":    "/file/copy",
 			"body": map[string]any{
-				"auto_rename":        true,
-				"file_id":            fid,
-				"share_id":           shareID,
-				"to_drive_id":        driveID,
+				"auto_rename":       true,
+				"file_id":           fid,
+				"share_id":          shareID,
+				"to_drive_id":       driveID,
 				"to_parent_file_id": toParent,
 			},
 		}
@@ -444,11 +453,11 @@ func aliyunListRecentFileIDsInParent(client *http.Client, access, driveID, paren
 		want = 20
 	}
 	body, _ := json.Marshal(map[string]any{
-		"drive_id":          driveID,
-		"parent_file_id":    parentID,
-		"limit":             100,
-		"order_by":          "updated_at",
-		"order_direction":   "DESC",
+		"drive_id":        driveID,
+		"parent_file_id":  parentID,
+		"limit":           100,
+		"order_by":        "updated_at",
+		"order_direction": "DESC",
 	})
 	resp, err := httpDoJSONBearerAliyun(client, http.MethodPost, "https://api.aliyundrive.com/v2/file/list", access, "", body, "阿里云盘")
 	if err != nil {
@@ -517,10 +526,10 @@ func aliyunCreateShareLink(client *http.Client, access, driveID string, fileIDs 
 	// 优先使用官方 OpenAPI：/adrive/v1.0/openFile/createShare（字段为 camelCase）
 	// 文档示例见你提供的“创建文件分享”说明。
 	openBody, _ := json.Marshal(map[string]any{
-		"driveId":     driveID,
-		"fileIdList":  fileIDs,
-		"expiration":  "",
-		"sharePwd":    "",
+		"driveId":    driveID,
+		"fileIdList": fileIDs,
+		"expiration": "",
+		"sharePwd":   "",
 	})
 	endpoint := "https://open.aliyundrive.com/adrive/v1.0/openFile/createShare"
 	resp, err := httpDoJSONBearerAliyun(client, http.MethodPost, endpoint, access, "", openBody, "阿里云盘")

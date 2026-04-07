@@ -71,9 +71,20 @@ export interface ISystemConfig {
   footer_wechat?: string
   auto_delete_invalid_links?: boolean
   hide_invalid_links_in_search?: boolean
+
+  /** Meilisearch：开启后搜索优先走 Meili（失败回退 MySQL） */
+  meili_enabled?: boolean
+  meili_url?: string
+  meili_api_key?: string
+  meili_index?: string
 }
 
 export const getSystemConfig = () => request.get<ICommonResponse<ISystemConfig>>('/system/config')
 
 export const updateSystemConfig = (data: ISystemConfig) =>
   request.put<ICommonResponse<unknown>>('/system/config', data)
+
+export const meiliTest = () => request.post<ICommonResponse<any>>('/system/config/meili/test')
+
+export const meiliReindex = (batch_size = 500) =>
+  request.post<ICommonResponse<any>>(`/system/config/meili/reindex?batch_size=${batch_size}`)

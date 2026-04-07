@@ -12,6 +12,14 @@
     "search_cache_ttl": 60,
     "ping_timeout": 3,
     "connect_timeout_ms": 2000
+  },
+  "meilisearch": {
+    "enabled": false,
+    "url": "http://127.0.0.1:7700",
+    "api_key": "",
+    "index": "resources",
+    "timeout_ms": 2500,
+    "primary_key": "id"
   }
 }
 
