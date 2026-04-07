@@ -1,4 +1,4 @@
-﻿import request from '@/utils/request'
+import request from '@/utils/request'
 import publicRequest from '@/utils/publicRequest'
 import type { ICommonResponse } from '@/types/common'
 
@@ -138,6 +138,23 @@ export const siteResourceLatestTransferLog = (id: string) =>
   >(`/resources/${id}/transfer/latest-log`)
 export const siteSearch = (params?: any) =>
   publicRequest.get<ICommonResponse<any>>('/search', { params })
+
+export type ITMDBItem = {
+  id: number
+  title: string
+  overview: string
+  poster?: string
+  backdrop?: string
+  release_date?: string
+  rating?: number
+  media_type?: 'movie' | 'tv'
+  url?: string
+}
+
+export const siteTMDBSearch = (params: { q: string }) =>
+  publicRequest.get<ICommonResponse<{ enabled: boolean; item: ITMDBItem | null }>>('/public/tmdb/search', {
+    params,
+  })
 
 /** 热搜榜，来自用户真实搜索统计。 */
 export const siteHotSearch = (params?: { limit?: number }) =>

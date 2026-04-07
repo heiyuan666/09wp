@@ -23,9 +23,21 @@ export default function SearchHeader({
   onSearch,
   onToggleTheme,
 }: SearchHeaderProps) {
+  const goHome = () => {
+    window.location.href = '/'
+  }
+
   return (
     <header className={styles.header}>
-      <div className={styles.brand}>
+      <div
+        className={styles.brand}
+        role="button"
+        tabIndex={0}
+        onClick={goHome}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') goHome()
+        }}
+      >
         <CloudIcon size={22} style={{ color: 'rgb(var(--semi-blue-5))' }} />
         <Text strong className={styles.brandName}>
           {siteTitle}

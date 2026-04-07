@@ -32,7 +32,7 @@
     <footer v-if="!isHomeRoute" class="public-footer" id="contact">
       <div class="inner footer-grid">
         <div class="about">
-          <div class="footer-brand">
+          <div class="footer-brand clickable" @click="goHome">
             <img v-if="runtimeConfig.logoUrl" :src="runtimeConfig.logoUrl" alt="logo" class="brand-logo" />
             <span v-if="runtimeConfig.showSiteTitle !== false" class="brand-title">{{ runtimeConfig.siteTitle || '盘小子' }}</span>
           </div>
@@ -40,9 +40,9 @@
         </div>
         <div>
           <h4>快捷链接</h4>
-          <a href="/">首页</a>
-          <a href="/search">资源列表</a>
-          <a href="#contact">联系我们</a>
+          <a v-for="(lnk, i) in footerQuickLinks" :key="`q-${i}`" :href="lnk.url || '#'">
+            {{ lnk.title || lnk.url }}
+          </a>
           <template v-if="runtimeConfig.friendLinks?.length">
             <a
               v-for="(fl, i) in runtimeConfig.friendLinks"
@@ -57,17 +57,17 @@
         </div>
         <div>
           <h4>热门网盘</h4>
-          <span>夸克网盘</span>
-          <span>阿里云盘</span>
-          <span>百度网盘</span>
-          <span>迅雷云盘</span>
+          <span v-for="(it, i) in footerHotPlatforms" :key="`hp-${i}`">{{ it }}</span>
         </div>
         <div>
           <h4>联系我们</h4>
-          <span>微信公众号</span>
+          <span>{{ runtimeConfig.footerWechat || '微信公众号' }}</span>
           <span>{{ runtimeConfig.supportEmail || 'support@example.com' }}</span>
           <h4 class="social-title">社交媒体</h4>
-          <span>Twitter</span>
+          <template v-for="(it, i) in footerSocialLinks" :key="`soc-${i}`">
+            <a v-if="it.url" :href="it.url" target="_blank" rel="noopener noreferrer">{{ it.title || it.url }}</a>
+            <span v-else>{{ it.title }}</span>
+          </template>
         </div>
       </div>
       <div class="inner copyright">© 2026 {{ runtimeConfig.siteTitle || '盘小子' }}. All rights reserved.</div>
@@ -115,6 +115,31 @@ const applyDouban = async (kw: string) => {
 
 const buildDoubanCoverSrc = (cover?: string) =>
   buildProxiedImageSrc(cover, String(runtimeConfig.doubanCoverProxyUrl || '').trim())
+
+const footerQuickLinks = computed(() => {
+  if (Array.isArray(runtimeConfig.footerQuickLinks) && runtimeConfig.footerQuickLinks.length > 0) {
+    return runtimeConfig.footerQuickLinks
+  }
+  return [
+    { title: '首页', url: '/' },
+    { title: '资源列表', url: '/search' },
+    { title: '联系我们', url: '#contact' },
+  ]
+})
+
+const footerHotPlatforms = computed(() => {
+  if (Array.isArray(runtimeConfig.footerHotPlatforms) && runtimeConfig.footerHotPlatforms.length > 0) {
+    return runtimeConfig.footerHotPlatforms
+  }
+  return ['夸克网盘', '阿里云盘', '百度网盘', '迅雷云盘']
+})
+
+const footerSocialLinks = computed(() => {
+  if (Array.isArray(runtimeConfig.footerSocialLinks) && runtimeConfig.footerSocialLinks.length > 0) {
+    return runtimeConfig.footerSocialLinks
+  }
+  return [{ title: 'Twitter', url: '' }]
+})
 
 watch(
   () => runtimeConfig.doubanHotNavEnabled,
@@ -209,6 +234,9 @@ watch(
 }
 .public-shell.search-shell {
   background: #ffffff;
+}
+.clickable {
+  cursor: pointer;
 }
 .public-header {
   position: sticky;

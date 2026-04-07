@@ -150,6 +150,10 @@ type SystemConfig struct {
 	ClarityEnabled   bool   `gorm:"default:false" json:"clarity_enabled"`
 	// FriendLinks JSON 数组：[{"title":"名称","url":"https://..."}]，API 层用 json:"-" 由 handler 解析/序列化
 	FriendLinks                string `gorm:"type:text" json:"-"`
+	FooterQuickLinks           string `gorm:"type:text" json:"-"`
+	FooterHotPlatforms         string `gorm:"type:text" json:"-"`
+	FooterSocialLinks          string `gorm:"type:text" json:"-"`
+	FooterWechat               string `gorm:"size:120;default:''" json:"footer_wechat"`
 	AllowRegister              bool   `gorm:"default:true" json:"allow_register"`
 	SubmissionNeedReview       bool   `gorm:"default:true" json:"submission_need_review"`
 	SubmissionAutoTransfer     bool   `gorm:"default:false" json:"submission_auto_transfer"`
@@ -220,6 +224,10 @@ type SystemConfig struct {
 	// TgImageProxyURL TG 同步等资源的外链封面返代模板，如：https://wsrv.nl/?url=
 	// 仅对 source=telegram 且封面为 http(s) 外链时由前端拼接；本地 /public/covers 不经过此代理。
 	TgImageProxyURL string `gorm:"size:500;default:''" json:"tg_image_proxy_url"`
+	// TMDBBearerToken TMDB v4 Read Access Token（用于搜索补充影视信息）。
+	TMDBBearerToken string `gorm:"size:600;default:''" json:"tmdb_bearer_token"`
+	// TMDBProxyURL TMDB 请求代理地址（可选），如：http://127.0.0.1:7890
+	TMDBProxyURL string `gorm:"size:500;default:''" json:"tmdb_proxy_url"`
 
 	// AutoDeleteInvalidLinks 是否对失效链接资源自动“删除”
 	// 物理删除 resources，并清理对应的 user_favorites 记录（尽力兜底）。
@@ -243,6 +251,25 @@ type NavigationMenu struct {
 	Visible   bool      `gorm:"default:true" json:"visible"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// TMDBSearchCache TMDB 搜索缓存，避免每次都请求外网接口。
+type TMDBSearchCache struct {
+	ID          uint64    `gorm:"primaryKey" json:"id"`
+	Keyword     string    `gorm:"size:255;uniqueIndex" json:"keyword"`
+	HasItem     bool      `gorm:"default:false" json:"has_item"`
+	ItemID      int64     `gorm:"default:0" json:"item_id"`
+	Title       string    `gorm:"size:255;default:''" json:"title"`
+	Overview    string    `gorm:"type:text" json:"overview"`
+	Poster      string    `gorm:"size:500;default:''" json:"poster"`
+	Backdrop    string    `gorm:"size:500;default:''" json:"backdrop"`
+	ReleaseDate string    `gorm:"size:20;default:''" json:"release_date"`
+	Rating      float64   `gorm:"default:0" json:"rating"`
+	MediaType   string    `gorm:"size:20;default:''" json:"media_type"`
+	URL         string    `gorm:"size:500;default:''" json:"url"`
+	FetchedAt   time.Time `json:"fetched_at"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 // ResourceFeedback 用户在资源详情页提交的反馈
