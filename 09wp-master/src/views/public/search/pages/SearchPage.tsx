@@ -26,6 +26,8 @@ export default function SearchPage(bridge: SearchBridge) {
     elapsedMs,
     tmdbEnabled,
     tmdbItem,
+    doubanEnabled,
+    doubanItem,
     list,
     categories,
     filters,
@@ -38,6 +40,7 @@ export default function SearchPage(bridge: SearchBridge) {
   const isDark = themeMode === 'dark'
   const siteTitle = runtimeConfig.siteTitle || '09网盘搜索'
   const tmdbPoster = buildProxiedImageSrc(tmdbItem?.poster, String(runtimeConfig.tgImageProxyUrl || '').trim())
+  const doubanPoster = buildProxiedImageSrc(doubanItem?.poster, String(runtimeConfig.tgImageProxyUrl || '').trim())
 
   return (
     <ConfigProvider locale={zh_CN}>
@@ -92,6 +95,21 @@ export default function SearchPage(bridge: SearchBridge) {
                     {typeof tmdbItem.rating === 'number' ? ` · 评分 ${tmdbItem.rating.toFixed(1)}` : ''}
                   </div>
                   <div className={styles.tmdbOverview}>{tmdbItem.overview || '暂无简介'}</div>
+                </div>
+              </a>
+            ) : null}
+            {doubanEnabled && doubanItem ? (
+              <a className={styles.tmdbCard} href={doubanItem.url || '#'} target="_blank" rel="noreferrer">
+                {doubanPoster ? <img className={styles.tmdbPoster} src={doubanPoster} alt={doubanItem.title} /> : null}
+                <div className={styles.tmdbBody}>
+                  <div className={styles.tmdbTitle}>
+                    豆瓣：{doubanItem.title}
+                    {doubanItem.year ? ` (${String(doubanItem.year).trim()})` : ''}
+                  </div>
+                  <div className={styles.tmdbMeta}>
+                    {doubanItem.rating ? `评分 ${doubanItem.rating}` : '暂无评分'}
+                  </div>
+                  <div className={styles.tmdbOverview}>{doubanItem.overview || '暂无简介'}</div>
                 </div>
               </a>
             ) : null}

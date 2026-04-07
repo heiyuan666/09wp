@@ -228,6 +228,8 @@ type SystemConfig struct {
 	TMDBBearerToken string `gorm:"size:600;default:''" json:"tmdb_bearer_token"`
 	// TMDBProxyURL TMDB 请求代理地址（可选），如：http://127.0.0.1:7890
 	TMDBProxyURL string `gorm:"size:500;default:''" json:"tmdb_proxy_url"`
+	// IYunsAPIBaseURL 聚合搜索/豆瓣信息接口基地址。
+	IYunsAPIBaseURL string `gorm:"size:255;default:'https://api.iyuns.com'" json:"iyuns_api_base_url"`
 
 	// AutoDeleteInvalidLinks 是否对失效链接资源自动“删除”
 	// 物理删除 resources，并清理对应的 user_favorites 记录（尽力兜底）。
@@ -270,6 +272,22 @@ type TMDBSearchCache struct {
 	FetchedAt   time.Time `json:"fetched_at"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// DoubanSearchCache 豆瓣信息缓存，避免重复请求外部接口。
+type DoubanSearchCache struct {
+	ID        uint64    `gorm:"primaryKey" json:"id"`
+	Keyword   string    `gorm:"size:255;uniqueIndex" json:"keyword"`
+	HasItem   bool      `gorm:"default:false" json:"has_item"`
+	DoubanURL string    `gorm:"size:500;default:''" json:"douban_url"`
+	Title     string    `gorm:"size:255;default:''" json:"title"`
+	Overview  string    `gorm:"type:text" json:"overview"`
+	Poster    string    `gorm:"size:500;default:''" json:"poster"`
+	Year      string    `gorm:"size:16;default:''" json:"year"`
+	Rating    string    `gorm:"size:32;default:''" json:"rating"`
+	FetchedAt time.Time `json:"fetched_at"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // ResourceFeedback 用户在资源详情页提交的反馈

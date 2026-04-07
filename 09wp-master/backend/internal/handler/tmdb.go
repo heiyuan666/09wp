@@ -1,8 +1,10 @@
 package handler
 
 import (
+	"context"
 	"dfan-netdisk-backend/internal/database"
 	"dfan-netdisk-backend/internal/model"
+	"dfan-netdisk-backend/internal/service"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -29,6 +31,11 @@ type tmdbItem struct {
 	FirstAir    string  `json:"first_air_date"`
 	VoteAverage float64 `json:"vote_average"`
 	MediaType   string  `json:"media_type"`
+}
+
+type tmdbSearchCachePayload struct {
+	Enabled bool          `json:"enabled"`
+	Item    map[string]any `json:"item"`
 }
 
 func tmdbSearchWithToken(token, q, proxyURL string) (*tmdbItem, error) {
@@ -123,15 +130,27 @@ func PublicTMDBSearch(c *gin.Context) {
 		return
 	}
 	keyword := tmdbNormalizeKeyword(q)
+	cacheKey := "public:tmdb:search:" + keyword
+	if b, ok := service.GetSearchCache(context.Background(), cacheKey); ok {
+		var payload tmdbSearchCachePayload
+		if err := json.Unmarshal(b, &payload); err == nil {
+			response.OK(c, payload)
+			return
+		}
+	}
 	var cached model.TMDBSearchCache
 	if err := database.DB().Where("keyword = ?", keyword).First(&cached).Error; err == nil {
 		if !cached.HasItem {
-			response.OK(c, gin.H{"enabled": true, "item": nil})
+			payload := tmdbSearchCachePayload{Enabled: true, Item: nil}
+			if raw, err := json.Marshal(payload); err == nil {
+				service.SetSearchCache(context.Background(), cacheKey, raw)
+			}
+			response.OK(c, payload)
 			return
 		}
-		response.OK(c, gin.H{
-			"enabled": true,
-			"item": gin.H{
+		payload := tmdbSearchCachePayload{
+			Enabled: true,
+			Item: map[string]any{
 				"id":           cached.ItemID,
 				"title":        cached.Title,
 				"overview":     strings.TrimSpace(cached.Overview),
@@ -142,7 +161,11 @@ func PublicTMDBSearch(c *gin.Context) {
 				"media_type":   cached.MediaType,
 				"url":          cached.URL,
 			},
-		})
+		}
+		if raw, err := json.Marshal(payload); err == nil {
+			service.SetSearchCache(context.Background(), cacheKey, raw)
+		}
+		response.OK(c, payload)
 		return
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 		// 缓存异常不阻断主流程，继续直连 TMDB
@@ -169,9 +192,9 @@ func PublicTMDBSearch(c *gin.Context) {
 		if releaseDate == "" {
 			releaseDate = strings.TrimSpace(item.FirstAir)
 		}
-		response.OK(c, gin.H{
-			"enabled": true,
-			"item": gin.H{
+		payload := tmdbSearchCachePayload{
+			Enabled: true,
+			Item: map[string]any{
 				"id":           item.ID,
 				"title":        title,
 				"overview":     strings.TrimSpace(item.Overview),
@@ -182,7 +205,11 @@ func PublicTMDBSearch(c *gin.Context) {
 				"media_type":   item.MediaType,
 				"url":          fmt.Sprintf("https://www.themoviedb.org/%s/%d", item.MediaType, item.ID),
 			},
-		})
+		}
+		if raw, err := json.Marshal(payload); err == nil {
+			service.SetSearchCache(context.Background(), cacheKey, raw)
+		}
+		response.OK(c, payload)
 		_ = database.DB().Where("keyword = ?", keyword).Assign(model.TMDBSearchCache{
 			Keyword:     keyword,
 			HasItem:     true,
@@ -204,6 +231,10 @@ func PublicTMDBSearch(c *gin.Context) {
 		HasItem:   false,
 		FetchedAt: time.Now(),
 	}).FirstOrCreate(&model.TMDBSearchCache{}).Error
-	response.OK(c, gin.H{"enabled": true, "item": nil})
+	payload := tmdbSearchCachePayload{Enabled: true, Item: nil}
+	if raw, err := json.Marshal(payload); err == nil {
+		service.SetSearchCache(context.Background(), cacheKey, raw)
+	}
+	response.OK(c, payload)
 }
 

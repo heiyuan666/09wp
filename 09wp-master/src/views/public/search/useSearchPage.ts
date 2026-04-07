@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { siteCategories, siteResourcePage, siteSearch, siteTMDBSearch, type ITMDBItem } from '@/api/netdisk'
+import {
+  siteCategories,
+  siteDoubanInfoSearch,
+  siteResourcePage,
+  siteSearch,
+  siteTMDBSearch,
+  type IDoubanInfoItem,
+  type ITMDBItem,
+} from '@/api/netdisk'
 import { type ICategory, type ISearchResource, type SearchFiltersState } from './searchHelpers'
 
 export type SearchBridge = {
@@ -27,6 +35,8 @@ export function useSearchPage({ routeQueryQ, onReplaceSearch, onGoDetail }: Sear
   const [categories, setCategories] = useState<ICategory[]>([])
   const [tmdbEnabled, setTmdbEnabled] = useState(false)
   const [tmdbItem, setTmdbItem] = useState<ITMDBItem | null>(null)
+  const [doubanEnabled, setDoubanEnabled] = useState(false)
+  const [doubanItem, setDoubanItem] = useState<IDoubanInfoItem | null>(null)
 
   const [filters, setFilters] = useState<SearchFiltersState>({
     sort: 'relevance',
@@ -111,6 +121,7 @@ export function useSearchPage({ routeQueryQ, onReplaceSearch, onGoDetail }: Sear
     const keyword = String(routeQueryQ || '').trim() || qInputRef.current.trim()
     if (!keyword) {
       setTmdbItem(null)
+      setDoubanItem(null)
       return
     }
     let cancelled = false
@@ -123,6 +134,18 @@ export function useSearchPage({ routeQueryQ, onReplaceSearch, onGoDetail }: Sear
       } catch {
         if (!cancelled) {
           setTmdbItem(null)
+        }
+      }
+    })()
+    void (async () => {
+      try {
+        const { data: res } = await siteDoubanInfoSearch({ q: keyword })
+        if (cancelled || res.code !== 200) return
+        setDoubanEnabled(Boolean(res.data?.enabled))
+        setDoubanItem(res.data?.item || null)
+      } catch {
+        if (!cancelled) {
+          setDoubanItem(null)
         }
       }
     })()
@@ -179,6 +202,8 @@ export function useSearchPage({ routeQueryQ, onReplaceSearch, onGoDetail }: Sear
     elapsedMs,
     tmdbEnabled,
     tmdbItem,
+    doubanEnabled,
+    doubanItem,
     list,
     categories,
     filters,
