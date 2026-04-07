@@ -16,6 +16,10 @@ interface IRuntimeConfig {
   supportEmail: string
   contactPhone: string
   friendLinks: IFriendLinkItem[]
+  footerQuickLinks: IFriendLinkItem[]
+  footerHotPlatforms: string[]
+  footerSocialLinks: IFriendLinkItem[]
+  footerWechat: string
   doubanHotNavEnabled: boolean
   hotSearchEnabled: boolean
   showSiteTitle: boolean
@@ -44,6 +48,14 @@ const defaultConfig: IRuntimeConfig = {
   supportEmail: '',
   contactPhone: '',
   friendLinks: [],
+  footerQuickLinks: [
+    { title: '首页', url: '/' },
+    { title: '资源列表', url: '/search' },
+    { title: '联系我们', url: '#contact' },
+  ],
+  footerHotPlatforms: ['夸克网盘', '阿里云盘', '百度网盘', '迅雷云盘'],
+  footerSocialLinks: [{ title: 'Twitter', url: '' }],
+  footerWechat: '',
   doubanHotNavEnabled: false,
   hotSearchEnabled: true,
   showSiteTitle: true,
@@ -150,6 +162,16 @@ export const loadRuntimeConfig = async () => {
         supportEmail: data.support_email || '',
         contactPhone: data.contact_phone || '',
         friendLinks: Array.isArray(data.friend_links) ? data.friend_links : [],
+        footerQuickLinks: Array.isArray(data.footer_quick_links)
+          ? data.footer_quick_links
+          : defaultConfig.footerQuickLinks,
+        footerHotPlatforms: Array.isArray(data.footer_hot_platforms)
+          ? data.footer_hot_platforms
+          : defaultConfig.footerHotPlatforms,
+        footerSocialLinks: Array.isArray(data.footer_social_links)
+          ? data.footer_social_links
+          : defaultConfig.footerSocialLinks,
+        footerWechat: data.footer_wechat || '',
         doubanHotNavEnabled: data.douban_hot_nav_enabled ?? false,
         hotSearchEnabled: data.hot_search_enabled ?? true,
         showSiteTitle: data.show_site_title ?? true,

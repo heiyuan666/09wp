@@ -38,6 +38,10 @@ type publicSystemConfig struct {
 	HaokaOrderURL              string           `json:"haoka_order_url"`
 	HaokaAgentRegURL           string           `json:"haoka_agent_reg_url"`
 	FriendLinks                []FriendLinkItem `json:"friend_links"`
+	FooterQuickLinks           []FriendLinkItem `json:"footer_quick_links"`
+	FooterHotPlatforms         []string         `json:"footer_hot_platforms"`
+	FooterSocialLinks          []FriendLinkItem `json:"footer_social_links"`
+	FooterWechat               string           `json:"footer_wechat"`
 	DoubanHotNavEnabled        bool             `json:"douban_hot_nav_enabled"`
 	HotSearchEnabled           bool             `json:"hot_search_enabled"`
 	ShowSiteTitle              bool             `json:"show_site_title"`
@@ -49,13 +53,19 @@ type publicSystemConfig struct {
 // systemConfigOut 管理端返回：附带解析后的 friend_links
 type systemConfigOut struct {
 	model.SystemConfig
-	FriendLinks []FriendLinkItem `json:"friend_links"`
+	FriendLinks        []FriendLinkItem `json:"friend_links"`
+	FooterQuickLinks   []FriendLinkItem `json:"footer_quick_links"`
+	FooterHotPlatforms []string         `json:"footer_hot_platforms"`
+	FooterSocialLinks  []FriendLinkItem `json:"footer_social_links"`
 }
 
 // systemConfigPut 更新请求：friend_links 为数组，入库时序列化为 JSON 字符串
 type systemConfigPut struct {
 	model.SystemConfig
-	FriendLinks []FriendLinkItem `json:"friend_links"`
+	FriendLinks        []FriendLinkItem `json:"friend_links"`
+	FooterQuickLinks   []FriendLinkItem `json:"footer_quick_links"`
+	FooterHotPlatforms []string         `json:"footer_hot_platforms"`
+	FooterSocialLinks  []FriendLinkItem `json:"footer_social_links"`
 }
 
 func parseFriendLinksJSON(s string) []FriendLinkItem {
@@ -94,6 +104,38 @@ func normalizeFriendLinks(items []FriendLinkItem) ([]FriendLinkItem, string) {
 	return out, string(raw)
 }
 
+func parseStringListJSON(s string) []string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return []string{}
+	}
+	var out []string
+	if err := json.Unmarshal([]byte(s), &out); err != nil {
+		return []string{}
+	}
+	return out
+}
+
+func normalizeStringList(items []string) ([]string, string) {
+	const maxN = 50
+	if len(items) > maxN {
+		items = items[:maxN]
+	}
+	out := make([]string, 0, len(items))
+	for _, it := range items {
+		v := strings.TrimSpace(it)
+		if v == "" {
+			continue
+		}
+		if len(v) > 120 {
+			v = v[:120]
+		}
+		out = append(out, v)
+	}
+	raw, _ := json.Marshal(out)
+	return out, string(raw)
+}
+
 // GetSystemConfig 获取全局系统配置
 func GetSystemConfig(c *gin.Context) {
 	var cfg model.SystemConfig
@@ -102,7 +144,13 @@ func GetSystemConfig(c *gin.Context) {
 		return
 	}
 	links := parseFriendLinksJSON(cfg.FriendLinks)
-	response.OK(c, systemConfigOut{SystemConfig: cfg, FriendLinks: links})
+	response.OK(c, systemConfigOut{
+		SystemConfig:      cfg,
+		FriendLinks:       links,
+		FooterQuickLinks:  parseFriendLinksJSON(cfg.FooterQuickLinks),
+		FooterHotPlatforms: parseStringListJSON(cfg.FooterHotPlatforms),
+		FooterSocialLinks: parseFriendLinksJSON(cfg.FooterSocialLinks),
+	})
 }
 
 // GetPublicSystemConfig 获取前台可用系统配置（无需登录）
@@ -122,6 +170,9 @@ func GetPublicSystemConfig(c *gin.Context) {
 		return
 	}
 	links := parseFriendLinksJSON(cfg.FriendLinks)
+	footerQuickLinks := parseFriendLinksJSON(cfg.FooterQuickLinks)
+	footerHotPlatforms := parseStringListJSON(cfg.FooterHotPlatforms)
+	footerSocialLinks := parseFriendLinksJSON(cfg.FooterSocialLinks)
 	response.OK(c, publicSystemConfig{
 		SiteTitle:                  cfg.SiteTitle,
 		SupportEmail:               cfg.SupportEmail,
@@ -142,6 +193,10 @@ func GetPublicSystemConfig(c *gin.Context) {
 		HaokaOrderURL:              cfg.HaokaOrderURL,
 		HaokaAgentRegURL:           cfg.HaokaAgentRegURL,
 		FriendLinks:                links,
+		FooterQuickLinks:           footerQuickLinks,
+		FooterHotPlatforms:         footerHotPlatforms,
+		FooterSocialLinks:          footerSocialLinks,
+		FooterWechat:               cfg.FooterWechat,
 		DoubanHotNavEnabled:        cfg.DoubanHotNavEnabled,
 		HotSearchEnabled:           cfg.HotSearchEnabled,
 		ShowSiteTitle:              cfg.ShowSiteTitle,
@@ -171,6 +226,10 @@ func GetPublicSystemConfig(c *gin.Context) {
 		HaokaOrderURL:              cfg.HaokaOrderURL,
 		HaokaAgentRegURL:           cfg.HaokaAgentRegURL,
 		FriendLinks:                links,
+		FooterQuickLinks:           footerQuickLinks,
+		FooterHotPlatforms:         footerHotPlatforms,
+		FooterSocialLinks:          footerSocialLinks,
+		FooterWechat:               cfg.FooterWechat,
 		DoubanHotNavEnabled:        cfg.DoubanHotNavEnabled,
 		HotSearchEnabled:           cfg.HotSearchEnabled,
 		ShowSiteTitle:              cfg.ShowSiteTitle,
@@ -214,6 +273,9 @@ func UpdateSystemConfig(c *gin.Context) {
 	}
 
 	_, friendLinksStr := normalizeFriendLinks(req.FriendLinks)
+	_, footerQuickLinksStr := normalizeFriendLinks(req.FooterQuickLinks)
+	_, footerHotPlatformsStr := normalizeStringList(req.FooterHotPlatforms)
+	_, footerSocialLinksStr := normalizeFriendLinks(req.FooterSocialLinks)
 
 	updates := map[string]interface{}{
 		"site_title":                    siteTitle,
@@ -230,6 +292,10 @@ func UpdateSystemConfig(c *gin.Context) {
 		"clarity_project_id":            strings.TrimSpace(req.ClarityProjectID),
 		"clarity_enabled":               req.ClarityEnabled,
 		"friend_links":                  friendLinksStr,
+		"footer_quick_links":            footerQuickLinksStr,
+		"footer_hot_platforms":          footerHotPlatformsStr,
+		"footer_social_links":           footerSocialLinksStr,
+		"footer_wechat":                 strings.TrimSpace(req.FooterWechat),
 		"allow_register":                req.AllowRegister,
 		"submission_need_review":        req.SubmissionNeedReview,
 		"submission_auto_transfer":      req.SubmissionAutoTransfer,
@@ -259,6 +325,8 @@ func UpdateSystemConfig(c *gin.Context) {
 		"home_rank_board_enabled":       req.HomeRankBoardEnabled,
 		"douban_cover_proxy_url":        req.DoubanCoverProxyURL,
 		"tg_image_proxy_url":            req.TgImageProxyURL,
+		"tmdb_bearer_token":             strings.TrimSpace(req.TMDBBearerToken),
+		"tmdb_proxy_url":                strings.TrimSpace(req.TMDBProxyURL),
 		"auto_delete_invalid_links":     req.AutoDeleteInvalidLinks,
 		"hide_invalid_links_in_search":  req.HideInvalidLinksInSearch,
 		"tg_channel_chat_id":            req.TgChannelChatID,

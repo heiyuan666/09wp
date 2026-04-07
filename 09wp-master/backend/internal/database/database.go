@@ -54,6 +54,7 @@ func AutoMigrate() error {
 		&model.Menu{},
 		&model.SearchHotWord{},
 		&model.NavigationMenu{},
+		&model.TMDBSearchCache{},
 		&model.NetdiskCredential{},
 		&model.ResourceFeedback{},
 		&model.RSSSubscription{},
@@ -120,6 +121,36 @@ func ensureRequiredColumns() error {
 	}
 	if !m.HasColumn(&model.SystemConfig{}, "TgImageProxyURL") {
 		if err := m.AddColumn(&model.SystemConfig{}, "TgImageProxyURL"); err != nil {
+			return err
+		}
+	}
+	if !m.HasColumn(&model.SystemConfig{}, "TMDBBearerToken") {
+		if err := m.AddColumn(&model.SystemConfig{}, "TMDBBearerToken"); err != nil {
+			return err
+		}
+	}
+	if !m.HasColumn(&model.SystemConfig{}, "TMDBProxyURL") {
+		if err := m.AddColumn(&model.SystemConfig{}, "TMDBProxyURL"); err != nil {
+			return err
+		}
+	}
+	if !m.HasColumn(&model.SystemConfig{}, "FooterQuickLinks") {
+		if err := m.AddColumn(&model.SystemConfig{}, "FooterQuickLinks"); err != nil {
+			return err
+		}
+	}
+	if !m.HasColumn(&model.SystemConfig{}, "FooterHotPlatforms") {
+		if err := m.AddColumn(&model.SystemConfig{}, "FooterHotPlatforms"); err != nil {
+			return err
+		}
+	}
+	if !m.HasColumn(&model.SystemConfig{}, "FooterSocialLinks") {
+		if err := m.AddColumn(&model.SystemConfig{}, "FooterSocialLinks"); err != nil {
+			return err
+		}
+	}
+	if !m.HasColumn(&model.SystemConfig{}, "FooterWechat") {
+		if err := m.AddColumn(&model.SystemConfig{}, "FooterWechat"); err != nil {
 			return err
 		}
 	}
@@ -207,6 +238,12 @@ func ensureRequiredColumns() error {
 		{"system_configs", "home_rank_board_enabled", "ALTER TABLE system_configs ADD COLUMN home_rank_board_enabled tinyint(1) NOT NULL DEFAULT 1"},
 		{"system_configs", "clarity_project_id", "ALTER TABLE system_configs ADD COLUMN clarity_project_id varchar(64) NOT NULL DEFAULT ''"},
 		{"system_configs", "clarity_enabled", "ALTER TABLE system_configs ADD COLUMN clarity_enabled tinyint(1) NOT NULL DEFAULT 0"},
+		{"system_configs", "tmdb_bearer_token", "ALTER TABLE system_configs ADD COLUMN tmdb_bearer_token varchar(600) NOT NULL DEFAULT ''"},
+		{"system_configs", "tmdb_proxy_url", "ALTER TABLE system_configs ADD COLUMN tmdb_proxy_url varchar(500) NOT NULL DEFAULT ''"},
+		{"system_configs", "footer_quick_links", "ALTER TABLE system_configs ADD COLUMN footer_quick_links text NOT NULL"},
+		{"system_configs", "footer_hot_platforms", "ALTER TABLE system_configs ADD COLUMN footer_hot_platforms text NOT NULL"},
+		{"system_configs", "footer_social_links", "ALTER TABLE system_configs ADD COLUMN footer_social_links text NOT NULL"},
+		{"system_configs", "footer_wechat", "ALTER TABLE system_configs ADD COLUMN footer_wechat varchar(120) NOT NULL DEFAULT ''"},
 		{"system_configs", "quark_cookie", "ALTER TABLE system_configs ADD COLUMN quark_cookie text NOT NULL"},
 		{"system_configs", "quark_auto_save", "ALTER TABLE system_configs ADD COLUMN quark_auto_save tinyint(1) NOT NULL DEFAULT 0"},
 		{"system_configs", "quark_target_folder_id", "ALTER TABLE system_configs ADD COLUMN quark_target_folder_id varchar(64) NOT NULL DEFAULT '0'"},

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Button, ConfigProvider, Empty, Pagination, Skeleton, Toast } from '@douyinfe/semi-ui'
 import zh_CN from '@douyinfe/semi-ui/lib/es/locale/source/zh_CN'
 import { runtimeConfig } from '@/config/runtimeConfig'
+import { buildProxiedImageSrc } from '@/utils/coverProxy'
 import SearchHeader from '../components/SearchHeader'
 import FilterPanel from '../components/FilterPanel'
 import ResultCard from '../components/ResultCard'
@@ -23,6 +24,8 @@ export default function SearchPage(bridge: SearchBridge) {
     total,
     loading,
     elapsedMs,
+    tmdbEnabled,
+    tmdbItem,
     list,
     categories,
     filters,
@@ -33,7 +36,8 @@ export default function SearchPage(bridge: SearchBridge) {
 
   const keyword = String(bridge.routeQueryQ || '').trim() || qInput.trim()
   const isDark = themeMode === 'dark'
-  const siteTitle = runtimeConfig.siteTitle || '懒盘搜索'
+  const siteTitle = runtimeConfig.siteTitle || '09网盘搜索'
+  const tmdbPoster = buildProxiedImageSrc(tmdbItem?.poster, String(runtimeConfig.tgImageProxyUrl || '').trim())
 
   return (
     <ConfigProvider locale={zh_CN}>
@@ -74,6 +78,23 @@ export default function SearchPage(bridge: SearchBridge) {
               <span>条，耗时</span>
               <span className={styles.summaryCount}>{elapsedMs}ms</span>
             </div>
+
+            {tmdbEnabled && tmdbItem ? (
+              <a className={styles.tmdbCard} href={tmdbItem.url || '#'} target="_blank" rel="noreferrer">
+                {tmdbPoster ? <img className={styles.tmdbPoster} src={tmdbPoster} alt={tmdbItem.title} /> : null}
+                <div className={styles.tmdbBody}>
+                  <div className={styles.tmdbTitle}>
+                    TMDB：{tmdbItem.title}
+                    {tmdbItem.release_date ? ` (${tmdbItem.release_date.slice(0, 4)})` : ''}
+                  </div>
+                  <div className={styles.tmdbMeta}>
+                    {tmdbItem.media_type === 'tv' ? '剧集' : '电影'}
+                    {typeof tmdbItem.rating === 'number' ? ` · 评分 ${tmdbItem.rating.toFixed(1)}` : ''}
+                  </div>
+                  <div className={styles.tmdbOverview}>{tmdbItem.overview || '暂无简介'}</div>
+                </div>
+              </a>
+            ) : null}
 
             <Skeleton
               loading={loading}

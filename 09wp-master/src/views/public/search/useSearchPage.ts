@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { siteCategories, siteResourcePage, siteSearch } from '@/api/netdisk'
+import { siteCategories, siteResourcePage, siteSearch, siteTMDBSearch, type ITMDBItem } from '@/api/netdisk'
 import { type ICategory, type ISearchResource, type SearchFiltersState } from './searchHelpers'
 
 export type SearchBridge = {
@@ -25,6 +25,8 @@ export function useSearchPage({ routeQueryQ, onReplaceSearch, onGoDetail }: Sear
   const [elapsedMs, setElapsedMs] = useState(0)
   const [list, setList] = useState<ISearchResource[]>([])
   const [categories, setCategories] = useState<ICategory[]>([])
+  const [tmdbEnabled, setTmdbEnabled] = useState(false)
+  const [tmdbItem, setTmdbItem] = useState<ITMDBItem | null>(null)
 
   const [filters, setFilters] = useState<SearchFiltersState>({
     sort: 'relevance',
@@ -105,6 +107,30 @@ export function useSearchPage({ routeQueryQ, onReplaceSearch, onGoDetail }: Sear
     void fetchList()
   }, [routeQueryQ, page, pageSize, filtersKey, fetchList])
 
+  useEffect(() => {
+    const keyword = String(routeQueryQ || '').trim() || qInputRef.current.trim()
+    if (!keyword) {
+      setTmdbItem(null)
+      return
+    }
+    let cancelled = false
+    void (async () => {
+      try {
+        const { data: res } = await siteTMDBSearch({ q: keyword })
+        if (cancelled || res.code !== 200) return
+        setTmdbEnabled(Boolean(res.data?.enabled))
+        setTmdbItem(res.data?.item || null)
+      } catch {
+        if (!cancelled) {
+          setTmdbItem(null)
+        }
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [routeQueryQ])
+
   const onSearch = useCallback(async () => {
     setPage(1)
     const keyword = qInputRef.current.trim()
@@ -151,6 +177,8 @@ export function useSearchPage({ routeQueryQ, onReplaceSearch, onGoDetail }: Sear
     total,
     loading,
     elapsedMs,
+    tmdbEnabled,
+    tmdbItem,
     list,
     categories,
     filters,

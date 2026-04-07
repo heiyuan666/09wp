@@ -44,6 +44,7 @@ func SetupRouter(jwtSecret string) *gin.Engine {
 	api.GET("/public/version", handler.PublicVersion)
 	api.GET("/public/hot-search", handler.GetPublicHotSearch)
 	api.GET("/public/douban-hot", handler.GetPublicDoubanHot)
+	api.GET("/public/tmdb/search", handler.PublicTMDBSearch)
 	api.GET("/public/haoka/categories", handler.HaokaCategoryListPublic)
 	api.GET("/public/haoka/products", handler.HaokaProductListPublic)
 	api.GET("/public/haoka/products/:id", handler.HaokaProductDetailPublic)

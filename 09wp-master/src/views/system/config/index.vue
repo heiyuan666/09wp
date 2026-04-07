@@ -133,6 +133,32 @@
         </span>
       </el-form-item>
 
+      <el-divider content-position="left">TMDB API</el-divider>
+      <el-form-item label="TMDB Token">
+        <el-input
+          v-model="form.tmdb_bearer_token"
+          type="password"
+          show-password
+          placeholder="填写 TMDB v4 Read Access Token"
+        />
+        <el-button
+          class="ml8"
+          type="primary"
+          link
+          @click="openTMDBApply"
+        >
+          申请 API
+        </el-button>
+        <span class="item-desc">用于前台搜索页展示 TMDB 影视信息卡，不填则不展示。</span>
+      </el-form-item>
+      <el-form-item label="TMDB 代理地址">
+        <el-input
+          v-model="form.tmdb_proxy_url"
+          placeholder="可选，如 http://127.0.0.1:7890"
+        />
+        <span class="item-desc">当服务器无法直连 TMDB 时可填写；仅影响 TMDB 请求。</span>
+      </el-form-item>
+
       <el-divider content-position="left">链接有效性检查</el-divider>
       <el-form-item label="自动删除无效链接">
         <el-switch v-model="form.auto_delete_invalid_links" />
@@ -152,6 +178,44 @@
           </div>
           <el-button type="primary" plain @click="addFriend">添加友情链接</el-button>
         </div>
+      </el-form-item>
+      <el-divider content-position="left">页脚快捷链接</el-divider>
+      <el-form-item label="快捷链接列表">
+        <div class="friend-links-editor">
+          <div v-for="(row, idx) in form.footer_quick_links" :key="`fql-${idx}`" class="friend-row">
+            <el-input v-model="row.title" placeholder="标题" class="friend-title" />
+            <el-input v-model="row.url" placeholder="https://... 或 /search 或 #contact" class="friend-url" />
+            <el-button type="danger" text @click="removeFooterQuickLink(idx)">删除</el-button>
+          </div>
+          <el-button type="primary" plain @click="addFooterQuickLink">添加快捷链接</el-button>
+        </div>
+      </el-form-item>
+
+      <el-divider content-position="left">页脚热门网盘</el-divider>
+      <el-form-item label="热门网盘列表">
+        <div class="friend-links-editor">
+          <div v-for="(name, idx) in form.footer_hot_platforms" :key="`fhp-${idx}`" class="friend-row">
+            <el-input v-model="form.footer_hot_platforms![idx]" placeholder="例如：夸克网盘" class="friend-url" />
+            <el-button type="danger" text @click="removeFooterHotPlatform(idx)">删除</el-button>
+          </div>
+          <el-button type="primary" plain @click="addFooterHotPlatform">添加热门网盘</el-button>
+        </div>
+      </el-form-item>
+
+      <el-divider content-position="left">页脚社交媒体</el-divider>
+      <el-form-item label="社交媒体列表">
+        <div class="friend-links-editor">
+          <div v-for="(row, idx) in form.footer_social_links" :key="`fsl-${idx}`" class="friend-row">
+            <el-input v-model="row.title" placeholder="名称，如 Twitter" class="friend-title" />
+            <el-input v-model="row.url" placeholder="https://...（可留空仅显示名称）" class="friend-url" />
+            <el-button type="danger" text @click="removeFooterSocialLink(idx)">删除</el-button>
+          </div>
+          <el-button type="primary" plain @click="addFooterSocialLink">添加社交媒体</el-button>
+        </div>
+      </el-form-item>
+
+      <el-form-item label="微信公众号">
+        <el-input v-model="form.footer_wechat" placeholder="例如：网盘资源导航" />
       </el-form-item>
 
       <el-divider content-position="left">SMTP 邮件</el-divider>
@@ -241,6 +305,10 @@ const form = reactive<ISystemConfig>({
   clarity_project_id: '',
   clarity_enabled: false,
   friend_links: [] as IFriendLinkItem[],
+  footer_quick_links: [] as IFriendLinkItem[],
+  footer_hot_platforms: [] as string[],
+  footer_social_links: [] as IFriendLinkItem[],
+  footer_wechat: '',
   allow_register: true,
   submission_need_review: true,
   submission_auto_transfer: false,
@@ -270,9 +338,15 @@ const form = reactive<ISystemConfig>({
   home_rank_board_enabled: true,
   douban_cover_proxy_url: '',
   tg_image_proxy_url: '',
+  tmdb_bearer_token: '',
+  tmdb_proxy_url: '',
   auto_delete_invalid_links: false,
   hide_invalid_links_in_search: false,
 })
+
+const openTMDBApply = () => {
+  window.open('https://www.themoviedb.org/settings/api', '_blank', 'noopener,noreferrer')
+}
 
 const load = async () => {
   const { data: res } = await getSystemConfig()
@@ -280,6 +354,15 @@ const load = async () => {
   Object.assign(form, res.data)
   if (!Array.isArray(form.friend_links)) {
     form.friend_links = []
+  }
+  if (!Array.isArray(form.footer_quick_links)) {
+    form.footer_quick_links = []
+  }
+  if (!Array.isArray(form.footer_hot_platforms)) {
+    form.footer_hot_platforms = []
+  }
+  if (!Array.isArray(form.footer_social_links)) {
+    form.footer_social_links = []
   }
 }
 
@@ -291,12 +374,39 @@ const removeFriend = (idx: number) => {
   form.friend_links!.splice(idx, 1)
 }
 
+const addFooterQuickLink = () => {
+  form.footer_quick_links!.push({ title: '', url: '' })
+}
+
+const removeFooterQuickLink = (idx: number) => {
+  form.footer_quick_links!.splice(idx, 1)
+}
+
+const addFooterHotPlatform = () => {
+  form.footer_hot_platforms!.push('')
+}
+
+const removeFooterHotPlatform = (idx: number) => {
+  form.footer_hot_platforms!.splice(idx, 1)
+}
+
+const addFooterSocialLink = () => {
+  form.footer_social_links!.push({ title: '', url: '' })
+}
+
+const removeFooterSocialLink = (idx: number) => {
+  form.footer_social_links!.splice(idx, 1)
+}
+
 const save = async () => {
   saving.value = true
   try {
     const payload: ISystemConfig = {
       ...form,
       friend_links: [...(form.friend_links || [])],
+      footer_quick_links: [...(form.footer_quick_links || [])],
+      footer_hot_platforms: [...(form.footer_hot_platforms || [])],
+      footer_social_links: [...(form.footer_social_links || [])],
       tg_api_id: Number(form.tg_api_id) || 0,
     }
     const { data: res } = await updateSystemConfig(payload)
@@ -316,6 +426,10 @@ const save = async () => {
       supportEmail: form.support_email || '',
       contactPhone: form.contact_phone || '',
       friendLinks: [...(form.friend_links || [])],
+      footerQuickLinks: [...(form.footer_quick_links || [])],
+      footerHotPlatforms: [...(form.footer_hot_platforms || [])],
+      footerSocialLinks: [...(form.footer_social_links || [])],
+      footerWechat: form.footer_wechat || '',
       doubanHotNavEnabled: form.douban_hot_nav_enabled ?? false,
       hotSearchEnabled: form.hot_search_enabled ?? true,
       showSiteTitle: form.show_site_title ?? true,
@@ -358,6 +472,9 @@ onMounted(load)
 .friend-url {
   flex: 1;
   min-width: 0;
+}
+.ml8 {
+  margin-left: 8px;
 }
 
 .item-desc {

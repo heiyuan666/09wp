@@ -121,6 +121,53 @@
   font-weight: 700;
 }
 
+.tmdbCard {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  text-decoration: none;
+  color: inherit;
+  border: 1px solid var(--semi-color-border);
+  border-radius: 10px;
+  background: var(--semi-color-bg-1);
+  padding: 12px;
+  margin-bottom: 14px;
+}
+
+.tmdbPoster {
+  width: 92px;
+  height: 128px;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
+.tmdbBody {
+  min-width: 0;
+}
+
+.tmdbTitle {
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.tmdbMeta {
+  font-size: 13px;
+  color: var(--semi-color-text-2);
+  margin-bottom: 8px;
+}
+
+.tmdbOverview {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--semi-color-text-1);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
 .resultList {
   display: grid;
   gap: 16px;

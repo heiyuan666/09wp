@@ -59,6 +59,14 @@ export interface ISystemConfig {
   douban_cover_proxy_url?: string
   /** TG 等资源外链封面返代，如 https://wsrv.nl/?url= */
   tg_image_proxy_url?: string
+  /** TMDB v4 Read Access Token（用于前台搜索补充影视信息） */
+  tmdb_bearer_token?: string
+  /** TMDB 请求代理地址（可选），如 http://127.0.0.1:7890 */
+  tmdb_proxy_url?: string
+  footer_quick_links?: IFriendLinkItem[]
+  footer_hot_platforms?: string[]
+  footer_social_links?: IFriendLinkItem[]
+  footer_wechat?: string
   auto_delete_invalid_links?: boolean
   hide_invalid_links_in_search?: boolean
 }
