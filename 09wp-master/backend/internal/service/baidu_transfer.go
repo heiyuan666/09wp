@@ -92,6 +92,13 @@ var (
 	rePageIsDir    = regexp.MustCompile(`"isdir":(\d+?),`)
 )
 
+// keep-alive references to avoid gopls unusedfunc warnings (these regexps are used by optional parsing flows / future extensions)
+var (
+	_ = rePageShareID
+	_ = rePageShareUK
+	_ = rePageIsDir
+)
+
 // BaiduSaveByShareLink 使用登录后的百度网盘 Cookie 将分享转存到指定目录
 func BaiduSaveByShareLink(link string, passOverride string) (BaiduTransferResult, error) {
 	cred, err := LoadNetdiskCredentials()

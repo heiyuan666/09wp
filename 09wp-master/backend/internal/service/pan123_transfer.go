@@ -12,7 +12,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
 )
 
 const pan123MainAPI = "https://www.123pan.com/b/api"
@@ -129,9 +128,10 @@ func pan123CollectShareFileIDs(client *http.Client, bearer, shareKey, sharePwd s
 				if fid == 0 {
 					continue
 				}
-				if typ == 0 {
+				switch typ {
+				case 0:
 					out = append(out, fid)
-				} else if typ == 1 {
+				case 1:
 					_ = walk(strconv.FormatInt(fid, 10), depth+1)
 				}
 			}

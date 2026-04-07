@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 )
 
 // DefaultPanCheckBaseURL 失效检测服务（PanCheck）默认地址，与后台「盘查服务地址」一致。
@@ -18,6 +19,26 @@ type Config struct {
 	JWTSecret       string
 	PanCheckBaseURL string
 	Redis           RedisConfig
+	Meili           MeiliConfig
+}
+
+// MeiliConfig Meilisearch 配置（可选）
+type MeiliConfig struct {
+	Enabled    bool
+	URL        string
+	APIKey     string
+	Index      string
+	TimeoutMS  int
+	PrimaryKey string
+}
+
+func (c MeiliConfig) IsZero() bool {
+	return !c.Enabled &&
+		strings.TrimSpace(c.URL) == "" &&
+		strings.TrimSpace(c.APIKey) == "" &&
+		strings.TrimSpace(c.Index) == "" &&
+		c.TimeoutMS == 0 &&
+		strings.TrimSpace(c.PrimaryKey) == ""
 }
 
 // RedisConfig Redis 缓存配置
@@ -38,6 +59,7 @@ type fileConfig struct {
 	JWTSecret       *string          `json:"jwt_secret"`
 	PanCheckBaseURL *string          `json:"pancheck_base_url"`
 	Redis           *fileRedisConfig `json:"redis"`
+	Meili           *fileMeiliConfig `json:"meilisearch"`
 }
 
 type fileRedisConfig struct {
@@ -49,6 +71,15 @@ type fileRedisConfig struct {
 	SearchTTL    *int    `json:"search_cache_ttl"`   // 秒
 	PingTimeout  *int    `json:"ping_timeout"`       // 秒
 	ConnectTTLMS *int    `json:"connect_timeout_ms"` // 毫秒
+}
+
+type fileMeiliConfig struct {
+	Enabled    *bool   `json:"enabled"`
+	URL        *string `json:"url"`
+	APIKey     *string `json:"api_key"`
+	Index      *string `json:"index"`
+	TimeoutMS  *int    `json:"timeout_ms"`
+	PrimaryKey *string `json:"primary_key"`
 }
 
 func applyFileConfig(cfg *Config, fc *fileConfig) {
@@ -68,32 +99,56 @@ func applyFileConfig(cfg *Config, fc *fileConfig) {
 		cfg.PanCheckBaseURL = *fc.PanCheckBaseURL
 	}
 	if fc.Redis == nil {
+		// continue
+	} else {
+		rc := fc.Redis
+		if rc.Enabled != nil {
+			cfg.Redis.Enabled = *rc.Enabled
+		}
+		if rc.Host != nil {
+			cfg.Redis.Host = *rc.Host
+		}
+		if rc.Port != nil {
+			cfg.Redis.Port = *rc.Port
+		}
+		if rc.Username != nil {
+			cfg.Redis.Username = *rc.Username
+		}
+		if rc.Password != nil {
+			cfg.Redis.Password = *rc.Password
+		}
+		if rc.SearchTTL != nil {
+			cfg.Redis.SearchTTL = *rc.SearchTTL
+		}
+		if rc.PingTimeout != nil {
+			cfg.Redis.PingTimeout = *rc.PingTimeout
+		}
+		if rc.ConnectTTLMS != nil {
+			cfg.Redis.ConnectTTLMS = *rc.ConnectTTLMS
+		}
+	}
+
+	if fc.Meili == nil {
 		return
 	}
-	rc := fc.Redis
-	if rc.Enabled != nil {
-		cfg.Redis.Enabled = *rc.Enabled
+	mc := fc.Meili
+	if mc.Enabled != nil {
+		cfg.Meili.Enabled = *mc.Enabled
 	}
-	if rc.Host != nil {
-		cfg.Redis.Host = *rc.Host
+	if mc.URL != nil {
+		cfg.Meili.URL = *mc.URL
 	}
-	if rc.Port != nil {
-		cfg.Redis.Port = *rc.Port
+	if mc.APIKey != nil {
+		cfg.Meili.APIKey = *mc.APIKey
 	}
-	if rc.Username != nil {
-		cfg.Redis.Username = *rc.Username
+	if mc.Index != nil {
+		cfg.Meili.Index = *mc.Index
 	}
-	if rc.Password != nil {
-		cfg.Redis.Password = *rc.Password
+	if mc.TimeoutMS != nil {
+		cfg.Meili.TimeoutMS = *mc.TimeoutMS
 	}
-	if rc.SearchTTL != nil {
-		cfg.Redis.SearchTTL = *rc.SearchTTL
-	}
-	if rc.PingTimeout != nil {
-		cfg.Redis.PingTimeout = *rc.PingTimeout
-	}
-	if rc.ConnectTTLMS != nil {
-		cfg.Redis.ConnectTTLMS = *rc.ConnectTTLMS
+	if mc.PrimaryKey != nil {
+		cfg.Meili.PrimaryKey = *mc.PrimaryKey
 	}
 }
 
@@ -156,6 +211,14 @@ func Load() Config {
 			PingTimeout:  3,
 			ConnectTTLMS: 2000,
 		},
+		Meili: MeiliConfig{
+			Enabled:    false,
+			URL:        "http://127.0.0.1:7700",
+			APIKey:     "",
+			Index:      "resources",
+			TimeoutMS:  2500,
+			PrimaryKey: "id",
+		},
 	}
 
 	// 1) 优先读取 config.json（可选）
@@ -208,6 +271,27 @@ func Load() Config {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			cfg.Redis.ConnectTTLMS = n
 		}
+	}
+
+	if v := os.Getenv("MEILI_ENABLED"); v != "" {
+		cfg.Meili.Enabled = v == "1" || v == "true" || v == "yes" || v == "on"
+	}
+	if v := os.Getenv("MEILI_URL"); v != "" {
+		cfg.Meili.URL = v
+	}
+	if v := os.Getenv("MEILI_API_KEY"); v != "" {
+		cfg.Meili.APIKey = v
+	}
+	if v := os.Getenv("MEILI_INDEX"); v != "" {
+		cfg.Meili.Index = v
+	}
+	if v := os.Getenv("MEILI_TIMEOUT_MS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			cfg.Meili.TimeoutMS = n
+		}
+	}
+	if v := os.Getenv("MEILI_PRIMARY_KEY"); v != "" {
+		cfg.Meili.PrimaryKey = v
 	}
 
 	return cfg

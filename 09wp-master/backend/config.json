@@ -1,6 +1,6 @@
 {
     "http_port": "8080",
-    "mysql_dsn": "pan:pan@tcp(111.170.19.100:3306)/pan?charset=utf8mb4&parseTime=True&loc=Local",
+    "mysql_dsn": "pan:pan@tcp(127.0.0.1:3306)/pan?charset=utf8mb4&parseTime=True&loc=Local",
     "jwt_secret": "dfan-netdisk-dev-secret",
     "pancheck_base_url": "https://pancheck.116818.xyz",
     "redis": {
@@ -12,6 +12,14 @@
       "search_cache_ttl": 60,
       "ping_timeout": 3,
       "connect_timeout_ms": 2000
+    },
+    "meilisearch": {
+      "enabled": false,
+      "url": "http://127.0.0.1:7700",
+      "api_key": "",
+      "index": "resources",
+      "timeout_ms": 2500,
+      "primary_key": "id"
     }
   }
   

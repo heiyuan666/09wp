@@ -15,7 +15,8 @@
     "build-only": "vite build && node --input-type=module -e \"import { copyFileSync } from 'node:fs'; copyFileSync('dist/index.html','dist/404.html');\"",
     "type-check": "vue-tsc --build",
     "lint": "eslint . --fix --cache",
-    "format": "prettier --write src/"
+    "format": "prettier --write src/",
+    "pack:linux": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/pack-linux.ps1"
   },
   "dependencies": {
     "@douyinfe/semi-icons": "^2.93.0",

@@ -175,6 +175,27 @@
         <el-switch v-model="form.hide_invalid_links_in_search" />
       </el-form-item>
 
+      <el-divider content-position="left">Meilisearch 搜索</el-divider>
+      <el-form-item label="启用 Meili 搜索">
+        <el-switch v-model="form.meili_enabled" />
+        <span class="item-desc">开启后：搜索优先走 Meilisearch；关闭则使用 MySQL。</span>
+      </el-form-item>
+      <el-form-item label="Meili URL">
+        <el-input v-model="form.meili_url" placeholder="http://127.0.0.1:7700" />
+      </el-form-item>
+      <el-form-item label="Meili API Key">
+        <el-input v-model="form.meili_api_key" type="password" show-password placeholder="可选：master key / API key" />
+      </el-form-item>
+      <el-form-item label="Meili Index">
+        <el-input v-model="form.meili_index" placeholder="resources" />
+        <el-button class="ml8" type="primary" plain :loading="meiliTesting" @click="testMeili">
+          测试连接
+        </el-button>
+        <el-button class="ml8" type="warning" plain :loading="meiliReindexing" @click="reindexMeili">
+          重建索引
+        </el-button>
+      </el-form-item>
+
       <el-divider content-position="left">友情链接</el-divider>
       <el-form-item label="友情链接列表">
         <div class="friend-links-editor">
@@ -290,6 +311,8 @@ import {
   getSystemConfig,
   type IFriendLinkItem,
   type ISystemConfig,
+  meiliReindex,
+  meiliTest,
   updateSystemConfig,
 } from '@/api/systemConfig'
 import { loadRuntimeConfig, runtimeConfig } from '@/config/runtimeConfig'
@@ -297,6 +320,8 @@ import { loadRuntimeConfig, runtimeConfig } from '@/config/runtimeConfig'
 defineOptions({ name: 'ConfigView' })
 
 const saving = ref(false)
+const meiliTesting = ref(false)
+const meiliReindexing = ref(false)
 const form = reactive<ISystemConfig>({
   site_title: '',
   admin_email: '',
@@ -350,6 +375,10 @@ const form = reactive<ISystemConfig>({
   iyuns_api_base_url: 'https://api.iyuns.com',
   auto_delete_invalid_links: false,
   hide_invalid_links_in_search: false,
+  meili_enabled: false,
+  meili_url: 'http://127.0.0.1:7700',
+  meili_api_key: '',
+  meili_index: 'resources',
 })
 
 const openTMDBApply = () => {
@@ -371,6 +400,29 @@ const load = async () => {
   }
   if (!Array.isArray(form.footer_social_links)) {
     form.footer_social_links = []
+  }
+}
+
+const testMeili = async () => {
+  meiliTesting.value = true
+  try {
+    const { data: res } = await meiliTest()
+    if (res.code !== 200) return
+    if (res.data?.ok) ElMessage.success(res.data?.message || '连接正常')
+    else ElMessage.warning(res.data?.message || '连接失败')
+  } finally {
+    meiliTesting.value = false
+  }
+}
+
+const reindexMeili = async () => {
+  meiliReindexing.value = true
+  try {
+    const { data: res } = await meiliReindex(500)
+    if (res.code !== 200) return
+    ElMessage.success(`已提交重建：indexed=${res.data?.indexed ?? 0} / total=${res.data?.total ?? 0}`)
+  } finally {
+    meiliReindexing.value = false
   }
 }
 

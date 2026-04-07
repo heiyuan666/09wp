@@ -718,6 +718,9 @@ func ucproCreateShareByFids(client *http.Client, baseURL, cookie string, fidList
 	return ucproPickShareLinkFromCreateResp(resp2, shareHost)
 }
 
+// keep-alive reference to avoid gopls unusedfunc warning (used by optional flows / future extensions)
+var _ = ucproCreateShareByFids
+
 func ucproPickShareLinkFromCreateResp(resp map[string]any, shareHost string) (string, error) {
 	if resp == nil {
 		return "", fmt.Errorf("创建分享无响应")

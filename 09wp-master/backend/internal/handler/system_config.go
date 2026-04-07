@@ -3,13 +3,17 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"net/http"
 	"strings"
+	"time"
 
+	"dfan-netdisk-backend/internal/config"
 	"dfan-netdisk-backend/internal/database"
 	"dfan-netdisk-backend/internal/model"
 	"dfan-netdisk-backend/internal/service"
 	"dfan-netdisk-backend/pkg/response"
 	"github.com/gin-gonic/gin"
+	"github.com/meilisearch/meilisearch-go"
 )
 
 // FriendLinkItem 友情链接（标题 + 链接）
@@ -145,11 +149,11 @@ func GetSystemConfig(c *gin.Context) {
 	}
 	links := parseFriendLinksJSON(cfg.FriendLinks)
 	response.OK(c, systemConfigOut{
-		SystemConfig:      cfg,
-		FriendLinks:       links,
-		FooterQuickLinks:  parseFriendLinksJSON(cfg.FooterQuickLinks),
+		SystemConfig:       cfg,
+		FriendLinks:        links,
+		FooterQuickLinks:   parseFriendLinksJSON(cfg.FooterQuickLinks),
 		FooterHotPlatforms: parseStringListJSON(cfg.FooterHotPlatforms),
-		FooterSocialLinks: parseFriendLinksJSON(cfg.FooterSocialLinks),
+		FooterSocialLinks:  parseFriendLinksJSON(cfg.FooterSocialLinks),
 	})
 }
 
@@ -330,6 +334,10 @@ func UpdateSystemConfig(c *gin.Context) {
 		"iyuns_api_base_url":            strings.TrimSpace(req.IYunsAPIBaseURL),
 		"auto_delete_invalid_links":     req.AutoDeleteInvalidLinks,
 		"hide_invalid_links_in_search":  req.HideInvalidLinksInSearch,
+		"meili_enabled":                 req.MeiliEnabled,
+		"meili_url":                     strings.TrimSpace(req.MeiliURL),
+		"meili_api_key":                 strings.TrimSpace(req.MeiliAPIKey),
+		"meili_index_name":              strings.TrimSpace(req.MeiliIndexName),
 		"tg_channel_chat_id":            req.TgChannelChatID,
 		"tg_sync_enabled":               req.TgSyncEnabled,
 		"tg_sync_interval":              req.TgSyncInterval,
@@ -344,5 +352,92 @@ func UpdateSystemConfig(c *gin.Context) {
 
 	// 配置更新后失效前台缓存，避免前台获取旧配置
 	service.DeleteSearchCache(context.Background(), "public:system-config:v3")
+
+	// 尝试热更新 Meilisearch 客户端（失败不影响保存）
+	_ = service.InitMeili(config.MeiliConfig{
+		Enabled:    req.MeiliEnabled,
+		URL:        strings.TrimSpace(req.MeiliURL),
+		APIKey:     strings.TrimSpace(req.MeiliAPIKey),
+		Index:      strings.TrimSpace(req.MeiliIndexName),
+		TimeoutMS:  2500,
+		PrimaryKey: "id",
+	})
 	response.OK(c, nil)
+}
+
+// AdminMeiliTest 测试 Meilisearch 连接与索引可用性
+func AdminMeiliTest(c *gin.Context) {
+	var cfg model.SystemConfig
+	if err := database.DB().Order("id ASC").First(&cfg).Error; err != nil {
+		response.Error(c, 404, "系统配置不存在")
+		return
+	}
+	if !cfg.MeiliEnabled {
+		response.OK(c, gin.H{"enabled": false, "ok": false, "message": "Meilisearch 未开启"})
+		return
+	}
+	host := strings.TrimSpace(cfg.MeiliURL)
+	if host == "" {
+		response.OK(c, gin.H{"enabled": true, "ok": false, "message": "Meilisearch URL 为空"})
+		return
+	}
+
+	client := meilisearch.New(host,
+		meilisearch.WithAPIKey(strings.TrimSpace(cfg.MeiliAPIKey)),
+		meilisearch.WithCustomClient(&http.Client{Timeout: 3 * time.Second}),
+	)
+	health, err := client.Health()
+	if err != nil {
+		response.OK(c, gin.H{"enabled": true, "ok": false, "message": "连接失败: " + err.Error()})
+		return
+	}
+	idxName := strings.TrimSpace(cfg.MeiliIndexName)
+	if idxName == "" {
+		idxName = "resources"
+	}
+	_, err = client.GetIndex(idxName)
+	if err != nil {
+		// 索引不存在也算“可连接”，但提示用户需要重建
+		response.OK(c, gin.H{
+			"enabled": true,
+			"ok":      true,
+			"health":  health,
+			"index":   idxName,
+			"message": "连接正常，但索引不存在（可点击重建索引）",
+		})
+		return
+	}
+	response.OK(c, gin.H{
+		"enabled": true,
+		"ok":      true,
+		"health":  health,
+		"index":   idxName,
+		"message": "连接正常",
+	})
+}
+
+// AdminMeiliReindex 全量重建 Meili 索引（从 MySQL 导入 resources）
+func AdminMeiliReindex(c *gin.Context) {
+	// 每次重建前按 DB 系统配置尝试初始化 Meili，避免后端启动时 meili=disabled 导致无法重建
+	var cfg model.SystemConfig
+	if err := database.DB().Order("id ASC").First(&cfg).Error; err != nil {
+		response.Error(c, 404, "系统配置不存在")
+		return
+	}
+	_ = service.InitMeili(config.MeiliConfig{
+		Enabled:    cfg.MeiliEnabled,
+		URL:        strings.TrimSpace(cfg.MeiliURL),
+		APIKey:     strings.TrimSpace(cfg.MeiliAPIKey),
+		Index:      strings.TrimSpace(cfg.MeiliIndexName),
+		TimeoutMS:  2500,
+		PrimaryKey: "id",
+	})
+
+	batchSize := service.ParseBatchSize(c.DefaultQuery("batch_size", "500"))
+	out, err := service.MeiliReindexAll(c.Request.Context(), batchSize)
+	if err != nil {
+		response.Error(c, 500, "重建索引失败: "+err.Error())
+		return
+	}
+	response.OK(c, out)
 }

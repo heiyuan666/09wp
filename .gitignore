@@ -1,2 +1,37 @@
 .DS_Store
 node_modules
+dist
+dist-ssr
+coverage
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+*.tsbuildinfo
+
+.eslintcache
+
+# Backend build / local exports
+backend/cmd/server/*.exe
+backend/storage/exports/
+
+# Cypress
+/cypress/videos/
+/cypress/screenshots/
+
+# Vitest
+__screenshots__/
+auto-imports.d.ts
+components.d.ts
+
+# 本地打包输出
+/release/
+/09wp-master/release/
