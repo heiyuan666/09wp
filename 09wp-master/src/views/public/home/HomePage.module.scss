@@ -113,10 +113,10 @@
 
 .heroTitle h1 {
   margin: 0;
-  font-size: 56px;
-  line-height: 1.05;
-  font-weight: 800;
-  letter-spacing: -1px;
+  font-size: 40px;
+  line-height: 1.15;
+  font-weight: 700;
+  letter-spacing: -0.5px;
 }
 
 .subtitle {
@@ -183,6 +183,62 @@
   border-radius: 14px;
   background: #fff;
   box-shadow: 0 6px 16px rgba(15, 23, 42, 0.05);
+}
+
+.hotTag {
+  border-radius: 999px !important;
+  border: none !important;
+  padding: 2px 10px 2px 6px !important;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #0f172a !important;
+  font-weight: 500;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.12);
+  transform: translateY(0);
+  transition: transform 0.16s ease, box-shadow 0.16s ease;
+}
+
+.hotTag:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.15);
+}
+
+// 彩色标签：按序轮换 6 种主色
+.hotTag:nth-child(6n + 1) {
+  background: linear-gradient(135deg, #fee2e2, #fecaca);
+}
+.hotTag:nth-child(6n + 2) {
+  background: linear-gradient(135deg, #e0f2fe, #bfdbfe);
+}
+.hotTag:nth-child(6n + 3) {
+  background: linear-gradient(135deg, #dcfce7, #bbf7d0);
+}
+.hotTag:nth-child(6n + 4) {
+  background: linear-gradient(135deg, #fef3c7, #fde68a);
+}
+.hotTag:nth-child(6n + 5) {
+  background: linear-gradient(135deg, #fae8ff, #e9d5ff);
+}
+.hotTag:nth-child(6n) {
+  background: linear-gradient(135deg, #e0f2fe, #a5b4fc);
+}
+
+.hotIndex {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #111827;
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.hotKeyword {
+  font-size: 13px;
 }
 
 :global([theme-mode='dark']) .hotPanel {

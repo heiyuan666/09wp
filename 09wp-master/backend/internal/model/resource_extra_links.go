@@ -11,7 +11,7 @@ import (
 type JSONStringList []string
 
 func (j JSONStringList) Value() (driver.Value, error) {
-	if j == nil || len(j) == 0 {
+	if len(j) == 0 {
 		return "[]", nil
 	}
 	b, err := json.Marshal([]string(j))

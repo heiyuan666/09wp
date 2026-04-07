@@ -6,6 +6,8 @@ import (
 	"dfan-netdisk-backend/internal/handler"
 	"dfan-netdisk-backend/internal/middleware"
 	"github.com/gin-gonic/gin"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
 func SetupRouter(jwtSecret string) *gin.Engine {
@@ -26,6 +28,9 @@ func SetupRouter(jwtSecret string) *gin.Engine {
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
+
+	// Swagger UI（OpenAPI 2.0，由 swag 生成 docs 包后可用）
+	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	// 公开 XML（SEO / 订阅）
 	r.GET("/sitemap.xml", handler.Sitemap)

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { API_BASE_URL } from '@/config/app.config'
 import {
   defaultConfig,
   siteNameFallback,
@@ -8,10 +9,6 @@ import {
   type NavMenuItem,
   type PublicConfig,
 } from './types'
-
-function apiBase(): string {
-  return (import.meta.env.VITE_API_BASE_URL || '/api/v1').replace(/\/+$/, '')
-}
 
 export function usePublicHomeData() {
   const [keyword, setKeyword] = useState('')
@@ -40,7 +37,7 @@ export function usePublicHomeData() {
 
   useEffect(() => {
     const controller = new AbortController()
-    const base = apiBase()
+    const base = API_BASE_URL
 
     fetch(`${base}/public/config`, { signal: controller.signal })
       .then(async (res) => res.json())

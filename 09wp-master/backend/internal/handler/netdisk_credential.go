@@ -49,6 +49,7 @@ func UpdateNetdiskCredentials(c *gin.Context) {
 	if strings.TrimSpace(req.AliyunTargetParentFileID) == "" {
 		req.AliyunTargetParentFileID = "root"
 	}
+	req.AliyunRenewAPIURL = strings.TrimSpace(req.AliyunRenewAPIURL)
 	if strings.TrimSpace(req.XunleiTargetFolderID) == "" {
 		req.XunleiTargetFolderID = "0"
 	}
@@ -84,6 +85,7 @@ func UpdateNetdiskCredentials(c *gin.Context) {
 		"uc_auto_save":                req.UcAutoSave,
 		"uc_target_folder_id":         req.UcTargetFolderID,
 		"aliyun_refresh_token":        req.AliyunRefreshToken,
+		"aliyun_renew_api_url":        req.AliyunRenewAPIURL,
 		"aliyun_auto_save":            req.AliyunAutoSave,
 		"aliyun_target_parent_file_id": req.AliyunTargetParentFileID,
 		"replace_link_after_transfer":  req.ReplaceLinkAfterTransfer,

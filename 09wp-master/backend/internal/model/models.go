@@ -209,6 +209,8 @@ type SystemConfig struct {
 	// DoubanHotNavEnabled 是否在前台导航栏展示豆瓣热门
 	DoubanHotNavEnabled bool `gorm:"default:false" json:"douban_hot_nav_enabled"`
 	HotSearchEnabled    bool `gorm:"default:true" json:"hot_search_enabled"`
+	// ShowSiteTitle 前台左上角品牌区是否显示网站名称（仅显示 Logo 时更简洁）
+	ShowSiteTitle bool `gorm:"default:true" json:"show_site_title"`
 	// HomeRankBoardEnabled 前台首页是否展示排行榜（热门/最新/豆瓣）
 	HomeRankBoardEnabled bool `gorm:"default:true" json:"home_rank_board_enabled"`
 	// DoubanCoverProxyURL 豆瓣封面返代接口模板，如：

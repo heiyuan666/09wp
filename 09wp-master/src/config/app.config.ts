@@ -3,6 +3,9 @@
  * 用户可以在这里自定义项目的各种配置项
  */
 
+/** 未配置 VITE_API_BASE_URL 时使用 /api/v1，避免 fetch('/public/...') 与 Vite public 目录冲突 */
+export const API_BASE_URL = String(import.meta.env.VITE_API_BASE_URL || '/api/v1').replace(/\/+$/, '')
+
 export const APP_CONFIG = {
   // 是否启用 MSW
   enableMSW: false,

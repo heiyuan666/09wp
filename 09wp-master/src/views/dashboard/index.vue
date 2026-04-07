@@ -2,6 +2,7 @@
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { adminStats, type IAdminStats } from '@/api/adminStats'
+import { API_BASE_URL } from '@/config/app.config'
 import { appVersion } from '@/config/appVersion'
 import { runtimeConfig } from '@/config/runtimeConfig'
 
@@ -35,9 +36,7 @@ const backendVersion = ref('')
 
 const loadBackendVersion = async () => {
   try {
-    const base = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '')
-    if (!base) return
-    const r = await fetch(`${base}/public/version`)
+    const r = await fetch(`${API_BASE_URL}/public/version`)
     const j = await r.json()
     if (j?.code === 200 && j?.data?.version) {
       backendVersion.value = String(j.data.version)

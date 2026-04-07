@@ -53,6 +53,7 @@ export interface ISystemConfig {
   tg_default_cat_id?: number
   douban_hot_nav_enabled?: boolean
   hot_search_enabled?: boolean
+  show_site_title?: boolean
   /** 前台首页是否显示排行榜模块 */
   home_rank_board_enabled?: boolean
   douban_cover_proxy_url?: string

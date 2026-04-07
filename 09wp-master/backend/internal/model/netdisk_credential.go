@@ -20,6 +20,9 @@ type NetdiskCredential struct {
 	// 阿里云盘（开放平台 refresh_token）
 	AliyunRefreshToken        string             `gorm:"type:text" json:"aliyun_refresh_token"`
 	AliyunRefreshTokenAccounts JSONCookieAccounts `gorm:"type:text;column:aliyun_refresh_token_accounts" json:"aliyun_refresh_token_accounts"`
+	// AliyunRenewAPIURL OpenList 等第三方提供的 token 续期接口地址（可选）。
+	// 例如：https://api.oplist.org/alicloud/renewapi
+	AliyunRenewAPIURL string `gorm:"size:500;default:''" json:"aliyun_renew_api_url"`
 	AliyunAutoSave           bool   `gorm:"default:false" json:"aliyun_auto_save"`
 	AliyunTargetParentFileID string `gorm:"size:64;default:'root'" json:"aliyun_target_parent_file_id"`
 	// 115

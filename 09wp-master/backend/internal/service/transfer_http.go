@@ -158,6 +158,7 @@ func httpDoJSONBearerAliyun(client *http.Client, method, endpoint, bearer string
 	req.Header.Set("origin", "https://www.alipan.com")
 	req.Header.Set("referer", "https://www.alipan.com/")
 	req.Header.Set("x-canary", "client=web,app=share,version=v2.3.1")
+	req.Header.Set("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
 	if xShareToken != "" {
 		req.Header.Set("X-Share-Token", xShareToken)
 	}
@@ -168,7 +169,14 @@ func httpDoJSONBearerAliyun(client *http.Client, method, endpoint, bearer string
 	defer resp.Body.Close()
 	raw, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("%s错误: %s", label, string(raw))
+		snippet := strings.TrimSpace(string(raw))
+		if len(snippet) > 800 {
+			snippet = snippet[:800] + "...(trunc)"
+		}
+		if snippet == "" {
+			return nil, fmt.Errorf("%s错误: HTTP %d endpoint=%s (empty body)", label, resp.StatusCode, endpoint)
+		}
+		return nil, fmt.Errorf("%s错误: HTTP %d endpoint=%s: %s", label, resp.StatusCode, endpoint, snippet)
 	}
 	var out map[string]any
 	if err := json.Unmarshal(raw, &out); err != nil {
@@ -184,24 +192,66 @@ func aliyunBizErr(m map[string]any) error {
 	if m == nil {
 		return nil
 	}
-	c := m["code"]
+	c, ok := m["code"]
+	if !ok {
+		return nil
+	}
+	msg := firstNonEmptyString(
+		getAnyString(m, "message"),
+		getAnyString(m, "msg"),
+		getAnyString(m, "error_description"),
+		getAnyString(m, "error"),
+	)
 	switch v := c.(type) {
 	case float64:
-		if v != 0 {
-			msg, _ := m["message"].(string)
-			return fmt.Errorf("阿里云盘: %s", msg)
+		if v == 0 {
+			return nil
 		}
-	case string:
-		if v == "" || v == "0" || strings.EqualFold(v, "OK") {
-			break
-		}
-		msg, _ := m["message"].(string)
 		if msg == "" {
-			msg = v
+			msg = fmt.Sprintf("code=%.0f", v)
+		}
+		return fmt.Errorf("阿里云盘: %s", msg)
+	case string:
+		cv := strings.TrimSpace(v)
+		if cv == "" || cv == "0" || strings.EqualFold(cv, "OK") {
+			return nil
+		}
+		if msg == "" {
+			msg = cv
+		}
+		return fmt.Errorf("阿里云盘: %s", msg)
+	default:
+		if msg == "" {
+			msg = fmt.Sprintf("code=%v", c)
 		}
 		return fmt.Errorf("阿里云盘: %s", msg)
 	}
-	return nil
+}
+
+func firstNonEmptyString(vals ...string) string {
+	for _, v := range vals {
+		v = strings.TrimSpace(v)
+		if v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+func getAnyString(m map[string]any, key string) string {
+	if m == nil {
+		return ""
+	}
+	v, ok := m[key]
+	if !ok || v == nil {
+		return ""
+	}
+	switch x := v.(type) {
+	case string:
+		return x
+	default:
+		return fmt.Sprintf("%v", x)
+	}
 }
 
 func httpDoJSONBearer(client *http.Client, method, endpoint, bearer string, body []byte, label string) (map[string]any, error) {

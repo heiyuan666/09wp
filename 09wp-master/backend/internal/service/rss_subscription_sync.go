@@ -94,6 +94,12 @@ var (
 	rssTelegramTagQueryReg = regexp.MustCompile(`[?&]q=%23([^&"'<>\s]+)`)
 	rssTagStripRe = regexp.MustCompile(`(?is)<[^>]+>`)
 	rssTitleTrim  = regexp.MustCompile(`^[#\s\-\|:：\[\]【】()（）]+|[#\s\-\|:：\[\]【】()（）]+$`)
+	// 删除描述中“关键词 + 链接”的整行（如：夸克：https://...）
+	rssWholeKeywordLinkLineReg = regexp.MustCompile(`(?m)^\s*(夸克|阿里云盘|alipan|迅雷|xunlei|百度网盘|pan\.baidu\.com|百度)\s*[：:]\s*https?://[^\s]+.*$`)
+	// 删除正文中仍残留的裸链接（兜底）
+	rssAnyURLReg = regexp.MustCompile(`https?://[^\s"'<>()]+`)
+	// 去掉清理裸链接后只剩“关键词：”这种空行残影
+	rssKeywordOnlyLineReg = regexp.MustCompile(`(?m)^\s*(夸克|阿里云盘|alipan|迅雷|xunlei|百度网盘|pan\.baidu\.com|百度|网盘|链接)\s*[：:]\s*$`)
 )
 
 // SyncRSSSubscriptionByID 同步指定 RSS 订阅
@@ -311,6 +317,7 @@ func mapRSSItemToResource(item rssItem) mappedRSSResource {
 	descHTML := decodeHTMLEntitiesLoop(item.Description.html())
 
 	descText := extractRSSIntro(descHTML, title)
+	descText = cleanRSSDescriptionLinks(descText)
 
 	cover := ""
 	if m := rssImageReg.FindStringSubmatch(descHTML); len(m) > 1 {
@@ -343,6 +350,26 @@ func mapRSSItemToResource(item rssItem) mappedRSSResource {
 		Cover:       cover,
 		Tags:        tags,
 	}
+}
+
+// cleanRSSDescriptionLinks 删除 RSS 描述中的下载/分享链接，避免前台详情页出现“夸克：https://...”等裸链接。
+func cleanRSSDescriptionLinks(raw string) string {
+	s := strings.TrimSpace(raw)
+	if s == "" {
+		return s
+	}
+
+	// 1) 删除整行关键词链接（最干净）
+	s = rssWholeKeywordLinkLineReg.ReplaceAllString(s, "")
+	// 2) 删除正文中所有裸 URL（兜底）
+	s = rssAnyURLReg.ReplaceAllString(s, "")
+	// 3) 删除清理后只剩“关键词：”的空残影行
+	s = rssKeywordOnlyLineReg.ReplaceAllString(s, "")
+
+	// 4) 压缩空行
+	s = strings.TrimSpace(s)
+	s = regexp.MustCompile(`\n{3,}`).ReplaceAllString(s, "\n\n")
+	return s
 }
 
 // pickRSSResourceLinks 返回主链接（首条网盘 URL）及后续其它网盘 URL

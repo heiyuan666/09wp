@@ -101,3 +101,39 @@ func SyncNetdiskCredentialsToSystemConfig(n model.NetdiskCredential) error {
 		"replace_link_after_transfer": n.ReplaceLinkAfterTransfer,
 	}).Error
 }
+
+// PersistXunleiRefreshToken 迅雷用 refresh_token 换 access 时若返回新 refresh_token，须写回库；
+// 否则旧 token 已作废，下次请求会报 invalid_grant（4126）。
+func PersistXunleiRefreshToken(oldRefresh, newRefresh string) error {
+	oldTrim := strings.TrimSpace(oldRefresh)
+	newTrim := strings.TrimSpace(newRefresh)
+	if oldTrim == "" || newTrim == "" || oldTrim == newTrim {
+		return nil
+	}
+	var n model.NetdiskCredential
+	if err := database.DB().First(&n, 1).Error; err != nil {
+		return err
+	}
+	changed := false
+	if strings.TrimSpace(n.XunleiCookie) == oldTrim {
+		n.XunleiCookie = newTrim
+		changed = true
+	}
+	accs := append([]model.NetdiskCookieAccount(nil), n.XunleiCookieAccounts...)
+	for i := range accs {
+		if strings.TrimSpace(accs[i].Cookie) == oldTrim {
+			accs[i].Cookie = newTrim
+			changed = true
+		}
+	}
+	if len(accs) > 0 {
+		n.XunleiCookieAccounts = model.JSONCookieAccounts(accs)
+	}
+	if !changed {
+		return nil
+	}
+	if err := database.DB().Save(&n).Error; err != nil {
+		return err
+	}
+	return SyncNetdiskCredentialsToSystemConfig(n)
+}

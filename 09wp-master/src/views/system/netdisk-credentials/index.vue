@@ -185,6 +185,13 @@
           hint="多个阿里云账号轮流使用 refresh_token；每行可单独指定转存目录 file_id，留空则用上方全局。"
         />
       </el-form-item>
+      <el-form-item label="renewapi（可选）">
+        <el-input
+          v-model="form.aliyun_renew_api_url"
+          placeholder="例如 https://api.oplist.org/alicloud/renewapi（留空则使用 api.aliyundrive.com/token/refresh）"
+        />
+        <span class="hint">用于通过 OpenList 等服务续期 access_token，部分 OpenAPI 场景更稳定</span>
+      </el-form-item>
       <el-form-item label="转存到目录 file_id">
         <el-input v-model="form.aliyun_target_parent_file_id" placeholder="默认 root（根目录）；子目录填对应 folder 的 file_id" />
       </el-form-item>
@@ -236,6 +243,7 @@ const form = reactive<INetdiskCredential>({
   uc_target_folder_id: '0',
   uc_auto_save: false,
   aliyun_refresh_token: '',
+  aliyun_renew_api_url: '',
   aliyun_target_parent_file_id: 'root',
   aliyun_auto_save: false,
   replace_link_after_transfer: false,

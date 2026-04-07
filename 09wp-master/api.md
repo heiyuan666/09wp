@@ -330,6 +330,88 @@
 }
 ```
 
+### 3.4 网盘凭证与转存
+
+#### 3.4.1 更新网盘凭证（阿里 / 百度 / 夸克 / 迅雷等）
+
+- **URL**：`PUT /api/v1/system/netdisk-credentials`
+- **认证**：管理员 Token
+- **说明**：统一维护各网盘的 Cookie / refresh_token / 目标目录等参数，保存后会同步到 `system_configs`。
+- **请求体示例（只列部分字段）**：
+
+```json
+{
+  "quark_cookie": "QUARK_SESS=...",
+  "quark_auto_save": true,
+  "quark_target_folder_id": "0",
+  "baidu_cookie": "BDUSS=...; STOKEN=...; BDCLND=...",
+  "baidu_auto_save": true,
+  "baidu_target_path": "/DFAN/转存",
+  "aliyun_refresh_token": "xxxxx",
+  "aliyun_auto_save": true,
+  "aliyun_target_parent_file_id": "root",
+  "xunlei_cookie": "a1.xxxxx",
+  "xunlei_auto_save": true,
+  "xunlei_target_folder_id": "0",
+  "replace_link_after_transfer": true
+}
+```
+
+> 建议先用管理后台「网盘凭证」页面填一遍，再通过 `GET /api/v1/system/netdisk-credentials` 查看完整字段结构。
+
+#### 3.4.2 手动重试单个资源转存
+
+- **URL**：`POST /api/v1/admin/resources/:id/retry-transfer`
+- **认证**：管理员 Token
+- **说明**：对指定资源 ID（主链接 + extra_links）按当前开启的自动转存配置重试一次；常用于转存失败后的人工重试。
+
+#### 3.4.3 通过链接直接发起转存
+
+- **URL**：`POST /api/v1/netdisk/transfer`
+- **认证**：管理员 Token
+- **说明**：传入单条分享链接和可选提取码，后端自动识别平台并调用对应网盘的转存流程。
+
+请求示例：
+
+```json
+{
+  "link": "https://pan.baidu.com/s/xxxx?pwd=0202",
+  "password": "0202",
+  "platform": "auto"
+}
+```
+
+响应示例：
+
+```json
+{
+  "code": 0,
+  "message": "转存完成",
+  "data": {
+    "platform": "baidu",
+    "old_link": "https://pan.baidu.com/s/xxxx?pwd=0202",
+    "new_link": "https://pan.baidu.com/s/本人分享链接",
+    "own_share_url": "https://pan.baidu.com/s/本人分享链接"
+  }
+}
+```
+
+#### 3.4.4 批量链接转存
+
+- **URL**：`POST /api/v1/netdisk/transfer/batch`
+- **认证**：管理员 Token
+- **说明**：一次提交多条链接进行转存，适合表格导入或脚本调用。
+
+```json
+{
+  "links": [
+    "https://pan.quark.cn/s/xxxx",
+    "https://www.alipan.com/s/xxxx",
+    "https://pan.xunlei.com/s/xxxx"
+  ]
+}
+```
+
 
 ## Open Netdisk API
 
@@ -359,3 +441,5 @@ Example:
 ```bash
 curl "http://localhost:8080/api/v1/open/netdisk/resources/12"
 ```
+
+> 提示：后端还集成了 Swagger 文档，开发调试时可通过 `/swagger/index.html` 以可视化方式浏览、试调所有 API。

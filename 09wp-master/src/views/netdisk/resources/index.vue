@@ -704,7 +704,7 @@ const resolveExportDownloadURL = (link: string) => {
   if (!value) return ''
   if (/^https?:\/\//i.test(value)) return value
 
-  const apiBaseURL = String(import.meta.env.VITE_API_BASE_URL || '').trim()
+  const apiBaseURL = String(import.meta.env.VITE_API_BASE_URL || '/api/v1').trim()
   if (/^https?:\/\//i.test(apiBaseURL)) {
     try {
       const backendBase = apiBaseURL.replace(/\/api\/v\d+\/?$/i, '/')

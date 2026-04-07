@@ -1,3 +1,14 @@
+// @title           DFAN Netdisk Backend API
+// @version         1.0
+// @description     网盘后台与前台 HTTP API。完整路径以 /api/v1 为前缀；文档由 swag 从注释生成，可随开发逐步补全 @Router 注释。
+// @BasePath        /api/v1
+// @host            localhost:8080
+// @schemes         http https
+
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description     登录后获得的 JWT；请求头 Authorization 值为 Bearer 加空格再加 token
 package main
 
 import (
@@ -5,6 +16,8 @@ import (
 	"log"
 	"os"
 	"strings"
+
+	_ "dfan-netdisk-backend/docs"
 
 	"dfan-netdisk-backend/internal/config"
 	"dfan-netdisk-backend/internal/database"

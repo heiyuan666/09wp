@@ -7,13 +7,9 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
-)
-
-const (
-	aliyunOAuthClientID     = "25dfd58f537fb25ed59e528a124b6e06"
-	aliyunOAuthClientSecret = "25dfd58f537fb25ed59e528a124b6e06"
 )
 
 type AliyunTransferResult struct {
@@ -21,6 +17,18 @@ type AliyunTransferResult struct {
 	Message     string `json:"message"`
 	Raw         any    `json:"raw,omitempty"`
 	OwnShareURL string `json:"own_share_url,omitempty"`
+}
+
+func aliyunTransferDebugEnabled() bool {
+	v := strings.ToLower(strings.TrimSpace(os.Getenv("NETDISK_TRANSFER_DEBUG")))
+	return v == "1" || v == "true" || v == "yes" || v == "on"
+}
+
+func aliyunDebugf(format string, args ...any) {
+	if !aliyunTransferDebugEnabled() {
+		return
+	}
+	fmt.Printf("[ALIYUN-TRANSFER] "+format+"\n", args...)
 }
 
 func parseAliyunShareID(link string) (string, error) {
@@ -39,44 +47,146 @@ func parseAliyunShareID(link string) (string, error) {
 	return id, nil
 }
 
-func aliyunRefreshAccessToken(refresh string) (access string, newRefresh string, err error) {
+func aliyunRefreshAccessToken(refresh string) (access string, newRefresh string, refreshDriveID string, err error) {
+	aliyunDebugf("refresh 开始 refresh_len=%d", len(strings.TrimSpace(refresh)))
 	client := &http.Client{Timeout: 20 * time.Second}
 	body, _ := json.Marshal(map[string]string{
-		"grant_type":    "refresh_token",
-		"refresh_token": refresh,
-		"client_id":     aliyunOAuthClientID,
-		"client_secret": aliyunOAuthClientSecret,
+		"refresh_token": strings.TrimSpace(refresh),
 	})
-	req, err := http.NewRequest(http.MethodPost, "https://open.aliyundrive.com/oauth/access_token", bytes.NewReader(body))
+	req, err := http.NewRequest(http.MethodPost, "https://api.aliyundrive.com/token/refresh", bytes.NewReader(body))
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 	req.Header.Set("content-type", "application/json")
+	req.Header.Set("accept", "application/json, text/plain, */*")
+	req.Header.Set("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 	defer resp.Body.Close()
 	raw, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode >= 400 {
-		return "", "", fmt.Errorf("刷新阿里云盘令牌失败: %s", string(raw))
-	}
 	var m map[string]any
 	if err := json.Unmarshal(raw, &m); err != nil {
-		return "", "", fmt.Errorf("刷新令牌响应解析失败")
+		return "", "", "", fmt.Errorf("刷新阿里云盘令牌响应解析失败")
+	}
+	aliyunDebugf("refresh 响应 http=%d body_len=%d", resp.StatusCode, len(raw))
+	if resp.StatusCode >= 400 {
+		if msg, ok := m["message"].(string); ok && strings.TrimSpace(msg) != "" {
+			return "", "", "", fmt.Errorf("刷新阿里云盘令牌失败: %s", msg)
+		}
+		return "", "", "", fmt.Errorf("刷新阿里云盘令牌失败: HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(raw)))
 	}
 	if err := aliyunBizErr(m); err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 	access, _ = m["access_token"].(string)
 	newRefresh, _ = m["refresh_token"].(string)
+	refreshDriveID = firstNonEmptyString(
+		getAnyString(m, "resource_drive_id"),
+		getAnyString(m, "default_drive_id"),
+	)
+	if dm, ok := m["data"].(map[string]any); ok && strings.TrimSpace(refreshDriveID) == "" {
+		refreshDriveID = firstNonEmptyString(
+			getAnyString(dm, "resource_drive_id"),
+			getAnyString(dm, "default_drive_id"),
+		)
+	}
 	if access == "" {
-		return "", "", fmt.Errorf("未获取到 access_token")
+		return "", "", "", fmt.Errorf("未获取到 access_token")
 	}
 	if newRefresh == "" {
 		newRefresh = refresh
 	}
-	return access, newRefresh, nil
+	aliyunDebugf("refresh 成功 access_len=%d new_refresh_changed=%v", len(access), strings.TrimSpace(newRefresh) != strings.TrimSpace(refresh))
+	return access, newRefresh, strings.TrimSpace(refreshDriveID), nil
+}
+
+// aliyunRefreshAccessTokenByRenewAPI 通过 OpenList 等第三方 renewapi 续期 access_token（官方 OpenAPI 常用）。
+// 参考：https://doc.oplist.org/guide/drivers/aliyundrive_open#_2-%E5%87%86%E5%A4%87%E6%8E%A5%E5%85%A5
+//
+// 该接口的返回字段在不同部署/版本可能略有差异，这里做最大兼容解析：
+// - access_token / accessToken
+// - refresh_token / refreshToken
+// - default_drive_id / resource_drive_id / drive_id / driveId
+func aliyunRefreshAccessTokenByRenewAPI(renewAPIURL string, refresh string) (access string, newRefresh string, refreshDriveID string, err error) {
+	renewAPIURL = strings.TrimSpace(renewAPIURL)
+	if renewAPIURL == "" {
+		return "", "", "", fmt.Errorf("renewapi 为空")
+	}
+	aliyunDebugf("renewapi 开始 url=%s refresh_len=%d", renewAPIURL, len(strings.TrimSpace(refresh)))
+	client := &http.Client{Timeout: 25 * time.Second}
+	body, _ := json.Marshal(map[string]string{
+		"refresh_token": strings.TrimSpace(refresh),
+	})
+	req, err := http.NewRequest(http.MethodPost, renewAPIURL, bytes.NewReader(body))
+	if err != nil {
+		return "", "", "", err
+	}
+	req.Header.Set("content-type", "application/json")
+	req.Header.Set("accept", "application/json, text/plain, */*")
+	req.Header.Set("user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", "", "", err
+	}
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(resp.Body)
+	aliyunDebugf("renewapi 响应 http=%d body_len=%d", resp.StatusCode, len(raw))
+	if resp.StatusCode >= 400 {
+		sn := strings.TrimSpace(string(raw))
+		if len(sn) > 800 {
+			sn = sn[:800] + "…(trunc)"
+		}
+		if sn == "" {
+			return "", "", "", fmt.Errorf("renewapi 续期失败: HTTP %d（空响应体）", resp.StatusCode)
+		}
+		return "", "", "", fmt.Errorf("renewapi 续期失败: HTTP %d: %s", resp.StatusCode, sn)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return "", "", "", fmt.Errorf("renewapi 响应解析失败")
+	}
+	// 兼容：部分服务会把真实数据包在 data 内
+	root := m
+	if dm, ok := m["data"].(map[string]any); ok && dm != nil {
+		// 只有当 data 内看起来像 token 数据时才切换
+		if getAnyString(dm, "access_token") != "" || getAnyString(dm, "accessToken") != "" {
+			root = dm
+		}
+	}
+	access = firstNonEmptyString(getAnyString(root, "access_token"), getAnyString(root, "accessToken"))
+	newRefresh = firstNonEmptyString(getAnyString(root, "refresh_token"), getAnyString(root, "refreshToken"))
+	refreshDriveID = firstNonEmptyString(
+		getAnyString(root, "resource_drive_id"),
+		getAnyString(root, "default_drive_id"),
+		getAnyString(root, "drive_id"),
+		getAnyString(root, "driveId"),
+	)
+	// 有些返回把 drive 信息放在 data.driver / data.user 里
+	if strings.TrimSpace(refreshDriveID) == "" {
+		if dm, ok := m["data"].(map[string]any); ok && dm != nil {
+			refreshDriveID = firstNonEmptyString(
+				getAnyString(dm, "resource_drive_id"),
+				getAnyString(dm, "default_drive_id"),
+				getAnyString(dm, "drive_id"),
+				getAnyString(dm, "driveId"),
+			)
+		}
+	}
+	if strings.TrimSpace(access) == "" {
+		// 尝试从 message/code 判断是否是业务错误
+		if msg := firstNonEmptyString(getAnyString(m, "message"), getAnyString(m, "msg")); msg != "" {
+			return "", "", "", fmt.Errorf("renewapi 续期失败: %s", msg)
+		}
+		return "", "", "", fmt.Errorf("renewapi 未返回 access_token")
+	}
+	if strings.TrimSpace(newRefresh) == "" {
+		newRefresh = refresh
+	}
+	aliyunDebugf("renewapi 成功 access_len=%d new_refresh_changed=%v", len(access), strings.TrimSpace(newRefresh) != strings.TrimSpace(refresh))
+	return strings.TrimSpace(access), strings.TrimSpace(newRefresh), strings.TrimSpace(refreshDriveID), nil
 }
 
 func aliyunGetResourceDriveID(client *http.Client, access string) (string, error) {
@@ -370,15 +480,28 @@ func aliyunPickShareURLFromCreate(resp map[string]any) string {
 	if resp == nil {
 		return ""
 	}
+	// OpenAPI v1.0 常见：shareUrl / share_id / share_url
+	if s, ok := getString(resp, "shareUrl"); ok && s != "" {
+		return s
+	}
 	if s, ok := getString(resp, "share_url"); ok && s != "" {
 		return s
 	}
+	if sid, ok := getString(resp, "shareId"); ok && sid != "" {
+		return "https://www.alipan.com/s/" + sid
+	}
 	if dm, ok := resp["data"].(map[string]any); ok {
+		if s, ok := dm["shareUrl"].(string); ok && s != "" {
+			return s
+		}
 		if s, ok := dm["share_url"].(string); ok && s != "" {
 			return s
 		}
 		if s, ok := dm["url"].(string); ok && s != "" {
 			return s
+		}
+		if sid, ok := dm["shareId"].(string); ok && sid != "" {
+			return "https://www.alipan.com/s/" + sid
 		}
 		if sid, ok := dm["share_id"].(string); ok && sid != "" {
 			return "https://www.alipan.com/s/" + sid
@@ -391,15 +514,28 @@ func aliyunCreateShareLink(client *http.Client, access, driveID string, fileIDs 
 	if len(fileIDs) == 0 {
 		return "", fmt.Errorf("没有可用于创建分享的文件")
 	}
-	body, _ := json.Marshal(map[string]any{
-		"drive_id":     driveID,
-		"file_id_list": fileIDs,
-		"share_pwd":    "",
-		"expiration":   "",
+	// 优先使用官方 OpenAPI：/adrive/v1.0/openFile/createShare（字段为 camelCase）
+	// 文档示例见你提供的“创建文件分享”说明。
+	openBody, _ := json.Marshal(map[string]any{
+		"driveId":     driveID,
+		"fileIdList":  fileIDs,
+		"expiration":  "",
+		"sharePwd":    "",
 	})
-	resp, err := httpDoJSONBearerAliyun(client, http.MethodPost, "https://api.aliyundrive.com/adrive/v2/share_link/create", access, "", body, "阿里云盘")
+	endpoint := "https://open.aliyundrive.com/adrive/v1.0/openFile/createShare"
+	resp, err := httpDoJSONBearerAliyun(client, http.MethodPost, endpoint, access, "", openBody, "阿里云盘")
 	if err != nil {
-		return "", err
+		// 兜底：老接口（部分账号/令牌来源可能仍需要）
+		body, _ := json.Marshal(map[string]any{
+			"drive_id":     driveID,
+			"file_id_list": fileIDs,
+			"share_pwd":    "",
+			"expiration":   "",
+		})
+		resp, err = httpDoJSONBearerAliyun(client, http.MethodPost, "https://api.aliyundrive.com/adrive/v2/share_link/create", access, "", body, "阿里云盘")
+		if err != nil {
+			return "", err
+		}
 	}
 	u := aliyunPickShareURLFromCreate(resp)
 	if u == "" {
@@ -464,36 +600,54 @@ func AliyunSaveByShareLink(link string, sharePwdOverride string) (AliyunTransfer
 	}
 	pwd := strings.TrimSpace(sharePwdOverride)
 
-	access, _, err := aliyunRefreshAccessToken(refresh)
-	if err != nil {
-		return AliyunTransferResult{}, err
+	aliyunDebugf("开始 link=%s shareID=%s pwd_len=%d", strings.TrimSpace(link), shareID, len(pwd))
+
+	// 若配置了 OpenList renewapi，则优先走 renewapi 续期（更贴近官方 OpenAPI 使用方式）；失败再回退 token/refresh。
+	var access, refreshDriveID string
+	if strings.TrimSpace(cfg.AliyunRenewAPIURL) != "" {
+		if a, _, did, e := aliyunRefreshAccessTokenByRenewAPI(cfg.AliyunRenewAPIURL, refresh); e != nil {
+			aliyunDebugf("renewapi 续期失败，回退 token/refresh：%v", e)
+		} else {
+			access = a
+			refreshDriveID = did
+		}
+	}
+	if strings.TrimSpace(access) == "" {
+		var e error
+		access, _, refreshDriveID, e = aliyunRefreshAccessToken(refresh)
+		if e != nil {
+			return AliyunTransferResult{}, fmt.Errorf("刷新 access_token 失败: %w", e)
+		}
 	}
 	client := &http.Client{Timeout: 45 * time.Second}
-	driveID, err := aliyunGetResourceDriveID(client, access)
-	if err != nil {
-		return AliyunTransferResult{}, err
-	}
+	// 兼容 AlipanPan.php：优先使用 token/refresh 响应中的 drive_id，不再调用已返回 404 的 /v2/user/getDriveInfo。
+	driveID := strings.TrimSpace(refreshDriveID)
 	if strings.TrimSpace(driveID) == "" {
-		driveID = "2008425230" // xinyue-search: 固定 drive_id
+		driveID = "2008425230" // xinyue-search: 固定 drive_id 兜底
 	}
+	aliyunDebugf("driveID=%s", driveID)
 	shareToken, err := aliyunGetShareToken(client, access, shareID, pwd)
 	if err != nil {
-		return AliyunTransferResult{}, err
+		return AliyunTransferResult{}, fmt.Errorf("获取 share_token 失败: %w", err)
 	}
+	aliyunDebugf("shareToken_len=%d", len(strings.TrimSpace(shareToken)))
 	toParent := effectiveAliyunParent(picked, cfg.AliyunTargetParentFileID)
+	aliyunDebugf("toParent=%s", toParent)
 
 	fileIDs, err := aliyunGetShareAnonFileInfos(client, access, shareID)
 	if err != nil {
-		return AliyunTransferResult{}, err
+		return AliyunTransferResult{}, fmt.Errorf("获取分享文件列表失败: %w", err)
 	}
 	if len(fileIDs) == 0 {
 		return AliyunTransferResult{}, fmt.Errorf("分享内没有可转存的文件")
 	}
+	aliyunDebugf("anon fileIDs=%d", len(fileIDs))
 
 	newFileIDs, err := aliyunBatchCopyShareFiles(client, access, driveID, shareID, shareToken, toParent, fileIDs)
 	if err != nil {
-		return AliyunTransferResult{}, err
+		return AliyunTransferResult{}, fmt.Errorf("批量转存失败: %w", err)
 	}
+	aliyunDebugf("batch copy newFileIDs=%d", len(newFileIDs))
 
 	msg := "转存完成"
 	out := AliyunTransferResult{ShareID: shareID, Message: msg}

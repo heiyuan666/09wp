@@ -12,9 +12,11 @@
       :class="{ '--menu-border': menuStore.isMobile }"
     >
       <Transition name="bounce">
-        <el-menu-item class="logo" v-if="themeStore.showLogo">
+        <el-menu-item class="logo" v-if="themeStore.showLogo" index="/" @click="goHome">
           <img :src="runtimeConfig.logoUrl || APP_CONFIG.logoSrc" alt="logo" class="logo-img" />
-          <span class="logo-title" :style="{ color: logoTitleColor }">{{ runtimeConfig.siteTitle }}</span>
+          <span v-if="runtimeConfig.showSiteTitle !== false" class="logo-title" :style="{ color: logoTitleColor }">
+            {{ runtimeConfig.siteTitle }}
+          </span>
         </el-menu-item>
       </Transition>
 
@@ -73,6 +75,11 @@ const navigation = (key: string) => {
     menuStore.isMobileMenuOpen = false
   }
 }
+
+const goHome = () => {
+  if (route.path === '/') return
+  router.push('/')
+}
 </script>
 
 <style scoped lang="scss">
@@ -97,10 +104,10 @@ const navigation = (key: string) => {
     }
 
     .logo-title {
-      font-size: 1.25rem;
-      font-weight: 700;
-      color: var(--el-text-color-primary);
-      letter-spacing: 0.5px;
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--el-text-color-regular);
+      letter-spacing: 0.2px;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
