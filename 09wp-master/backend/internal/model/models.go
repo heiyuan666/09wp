@@ -62,11 +62,13 @@ type Resource struct {
 	TransferMsg        string     `gorm:"size:255;default:''" json:"transfer_msg"`
 	TransferRetryCount int        `gorm:"default:0" json:"transfer_retry_count"`
 	TransferLastAt     *time.Time `json:"transfer_last_at,omitempty"`
-	ViewCount          uint64     `gorm:"default:0" json:"view_count"`
-	SortOrder          int        `gorm:"default:0" json:"sort_order"`
-	Status             int8       `gorm:"default:1;index" json:"status"` // 1=显示 0=隐藏
-	CreatedAt          time.Time  `json:"created_at"`
-	UpdatedAt          time.Time  `json:"updated_at"`
+	// idx_res_pub_hot: 前台 WHERE status=1 ORDER BY view_count（InnoDB 二级索引叶子含主键 id）
+	ViewCount uint64 `gorm:"default:0;index:idx_res_pub_hot,priority:2" json:"view_count"`
+	SortOrder int    `gorm:"default:0" json:"sort_order"`
+	// idx_res_pub_latest: 前台 WHERE status=1 ORDER BY created_at
+	Status    int8      `gorm:"default:1;index;index:idx_res_pub_hot,priority:1;index:idx_res_pub_latest,priority:1" json:"status"` // 1=显示 0=隐藏
+	CreatedAt time.Time `gorm:"index:idx_res_pub_latest,priority:2" json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // ResourceTransferLog 网盘转存尝试日志
@@ -213,6 +215,9 @@ type SystemConfig struct {
 	// https://image.baidu.com/search/down?url=
 	// 或支持模板：...{url}
 	DoubanCoverProxyURL string `gorm:"size:500;default:''" json:"douban_cover_proxy_url"`
+	// TgImageProxyURL TG 同步等资源的外链封面返代模板，如：https://wsrv.nl/?url=
+	// 仅对 source=telegram 且封面为 http(s) 外链时由前端拼接；本地 /public/covers 不经过此代理。
+	TgImageProxyURL string `gorm:"size:500;default:''" json:"tg_image_proxy_url"`
 
 	// AutoDeleteInvalidLinks 是否对失效链接资源自动“删除”
 	// 物理删除 resources，并清理对应的 user_favorites 记录（尽力兜底）。

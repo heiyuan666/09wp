@@ -73,6 +73,78 @@ func applyResourceFilters(db *gorm.DB, c *gin.Context) *gorm.DB {
 	return db
 }
 
+// resourcePublicListQuery 前台资源列表 WHERE（无排序分页）。分别建链做 Count / Find，避免 GORM 在 Count 后污染 Find。
+func resourcePublicListQuery(c *gin.Context) *gorm.DB {
+	q := database.DB().Model(&model.Resource{}).Where("status = 1")
+	return applyResourceFilters(q, c)
+}
+
+// adminResourceListQuery 后台资源列表 WHERE（无排序分页）。
+func adminResourceListQuery(c *gin.Context) *gorm.DB {
+	q := database.DB().Model(&model.Resource{})
+	if title := c.Query("title"); title != "" {
+		q = q.Where("title LIKE ?", "%"+title+"%")
+	}
+	if cid := c.Query("category_id"); cid != "" {
+		q = q.Where("category_id = ?", cid)
+	}
+	if status := c.Query("status"); status != "" {
+		q = q.Where("status = ?", status)
+	}
+	return q
+}
+
+// resourceSearchHideInvalid 未显式传 link_valid 时，是否按系统配置强制只搜有效链接。
+func resourceSearchHideInvalid(c *gin.Context) bool {
+	if c.Query("link_valid") != "" {
+		return false
+	}
+	var cfg model.SystemConfig
+	if err := database.DB().Order("id ASC").First(&cfg).Error; err != nil {
+		return false
+	}
+	return cfg.HideInvalidLinksInSearch
+}
+
+// resourceSearchQuery 搜索 WHERE（无排序分页）。每次 Count / Find 各建一条链，避免 GORM Count 污染 Find。
+func resourceSearchQuery(c *gin.Context, blocks []string, keywordNorm string) *gorm.DB {
+	q := database.DB().Model(&model.Resource{}).Where("status = 1")
+	q = applyResourceFilters(q, c)
+
+	if resourceSearchHideInvalid(c) {
+		q = q.Where("link_valid = ?", true)
+	}
+
+	phraseLike := "%" + keywordNorm + "%"
+	q = q.Where(
+		"(title LIKE ? OR description LIKE ? OR tags LIKE ?)",
+		phraseLike, phraseLike, phraseLike,
+	)
+	for _, part := range strings.Fields(keywordNorm) {
+		part = strings.TrimSpace(part)
+		if part == "" || part == keywordNorm {
+			continue
+		}
+		partLike := "%" + part + "%"
+		q = q.Where(
+			"(title LIKE ? OR description LIKE ? OR tags LIKE ?)",
+			partLike, partLike, partLike,
+		)
+	}
+
+	for _, w := range blocks {
+		if w == "" {
+			continue
+		}
+		notLike := "%" + service.EscapeLikePattern(w) + "%"
+		q = q.Where(
+			"title NOT LIKE ? ESCAPE '\\\\' AND description NOT LIKE ? ESCAPE '\\\\' AND tags NOT LIKE ? ESCAPE '\\\\'",
+			notLike, notLike, notLike,
+		)
+	}
+	return q
+}
+
 func sortOrderExpr(sort string) string {
 	if sort == "hot" {
 		return "view_count DESC, id DESC"
@@ -309,24 +381,10 @@ func AdminResourceBatchStatus(c *gin.Context) {
 
 // AdminResourceList 后台资源列表
 func AdminResourceList(c *gin.Context) {
-	var (
-		db  = database.DB().Model(&model.Resource{})
-		res []model.Resource
-	)
-
-	title := c.Query("title")
-	if title != "" {
-		db = db.Where("title LIKE ?", "%"+title+"%")
-	}
-	if cid := c.Query("category_id"); cid != "" {
-		db = db.Where("category_id = ?", cid)
-	}
-	if status := c.Query("status"); status != "" {
-		db = db.Where("status = ?", status)
-	}
+	var res []model.Resource
 
 	var total int64
-	if err := db.Count(&total).Error; err != nil {
+	if err := adminResourceListQuery(c).Count(&total).Error; err != nil {
 		response.Error(c, 500, "统计失败")
 		return
 	}
@@ -340,8 +398,10 @@ func AdminResourceList(c *gin.Context) {
 		pageSize = 20
 	}
 
-	if err := db.Order("sort_order DESC, id DESC").
-		Limit(pageSize).Offset((page - 1) * pageSize).
+	if err := adminResourceListQuery(c).
+		Order("sort_order DESC, id DESC").
+		Limit(pageSize).
+		Offset((page - 1) * pageSize).
 		Find(&res).Error; err != nil {
 		response.Error(c, 500, "查询失败")
 		return
@@ -351,15 +411,8 @@ func AdminResourceList(c *gin.Context) {
 }
 
 func ResourceList(c *gin.Context) {
-	var (
-		db  = database.DB().Model(&model.Resource{}).Where("status = 1")
-		res []model.Resource
-	)
-
-	db = applyResourceFilters(db, c)
-
 	var total int64
-	if err := db.Count(&total).Error; err != nil {
+	if err := resourcePublicListQuery(c).Count(&total).Error; err != nil {
 		response.Error(c, 500, "统计失败")
 		return
 	}
@@ -375,8 +428,13 @@ func ResourceList(c *gin.Context) {
 
 	orderExpr := sortOrderExpr(c.DefaultQuery("sort", "latest"))
 
-	if err := db.Order(orderExpr).
-		Limit(pageSize).Offset((page - 1) * pageSize).
+	var res []model.Resource
+	// 列表不拉取 description（TEXT），减轻 IO；详情接口仍返回全文
+	if err := resourcePublicListQuery(c).
+		Omit("Description").
+		Order(orderExpr).
+		Limit(pageSize).
+		Offset((page - 1) * pageSize).
 		Find(&res).Error; err != nil {
 		response.Error(c, 500, "查询失败")
 		return
@@ -548,11 +606,7 @@ func ResourceSearch(c *gin.Context) {
 		blocks = blocks[:200]
 	}
 
-	var (
-		db  = database.DB().Model(&model.Resource{}).Where("status = 1")
-		res []model.Resource
-	)
-	db = applyResourceFilters(db, c)
+	var res []model.Resource
 
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
@@ -563,46 +617,8 @@ func ResourceSearch(c *gin.Context) {
 		pageSize = 20
 	}
 	sortParam := strings.TrimSpace(c.DefaultQuery("sort", "relevance"))
-
-	hideInvalidInSearch := false
-	if c.Query("link_valid") == "" {
-		var cfg model.SystemConfig
-		if err := database.DB().Order("id ASC").First(&cfg).Error; err == nil {
-			hideInvalidInSearch = cfg.HideInvalidLinksInSearch
-			if hideInvalidInSearch {
-				db = db.Where("link_valid = ?", true)
-			}
-		}
-	}
-
+	hideInvalidInSearch := resourceSearchHideInvalid(c)
 	tokens := service.TokenizeSearchQuery(keywordNorm)
-	phraseLike := "%" + keywordNorm + "%"
-	db = db.Where(
-		"(title LIKE ? OR description LIKE ? OR tags LIKE ?)",
-		phraseLike, phraseLike, phraseLike,
-	)
-	for _, part := range strings.Fields(keywordNorm) {
-		part = strings.TrimSpace(part)
-		if part == "" || part == keywordNorm {
-			continue
-		}
-		partLike := "%" + part + "%"
-		db = db.Where(
-			"(title LIKE ? OR description LIKE ? OR tags LIKE ?)",
-			partLike, partLike, partLike,
-		)
-	}
-
-	for _, w := range blocks {
-		if w == "" {
-			continue
-		}
-		notLike := "%" + service.EscapeLikePattern(w) + "%"
-		db = db.Where(
-			"title NOT LIKE ? ESCAPE '\\\\' AND description NOT LIKE ? ESCAPE '\\\\' AND tags NOT LIKE ? ESCAPE '\\\\'",
-			notLike, notLike, notLike,
-		)
-	}
 
 	type searchCachePage struct {
 		List  []model.Resource `json:"list"`
@@ -632,27 +648,27 @@ func ResourceSearch(c *gin.Context) {
 	}
 
 	var total int64
-	if err := db.Count(&total).Error; err != nil {
+	if err := resourceSearchQuery(c, blocks, keywordNorm).Count(&total).Error; err != nil {
 		response.Error(c, 500, "统计失败")
 		return
 	}
 
-		query := db.Limit(pageSize).Offset((page - 1) * pageSize)
+	listTx := resourceSearchQuery(c, blocks, keywordNorm).Limit(pageSize).Offset((page - 1) * pageSize)
 	switch sortParam {
 	case "latest":
-		query = query.Order(sortOrderExpr("latest"))
+		listTx = listTx.Order(sortOrderExpr("latest"))
 	case "hot":
-		query = query.Order(sortOrderExpr("hot"))
+		listTx = listTx.Order(sortOrderExpr("hot"))
 	default:
 		relevanceOrderSQL, relevanceArgs := buildSearchRelevanceOrder(keywordNorm, tokens)
-		query = query.Clauses(clause.OrderBy{
+		listTx = listTx.Clauses(clause.OrderBy{
 			Expression: clause.Expr{
 				SQL:  relevanceOrderSQL,
 				Vars: relevanceArgs,
 			},
 		})
 	}
-	if err := query.Find(&res).Error; err != nil {
+	if err := listTx.Find(&res).Error; err != nil {
 		response.Error(c, 500, "查询失败")
 		return
 	}

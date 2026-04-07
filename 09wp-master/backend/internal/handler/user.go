@@ -26,6 +26,51 @@ func UserProfile(c *gin.Context) {
 	response.OK(c, toUserItem(user))
 }
 
+// AdminChangePassword 管理员修改密码
+func AdminChangePassword(c *gin.Context) {
+	userIDVal, _ := c.Get("user_id")
+	adminID, _ := userIDVal.(uint64)
+
+	var req struct {
+		OldPassword     string `json:"oldPassword" binding:"required"`
+		NewPassword     string `json:"newPassword" binding:"required,min=6"`
+		ConfirmPassword string `json:"confirmPassword" binding:"required,min=6"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, 400, "参数错误")
+		return
+	}
+
+	var admin model.Admin
+	if err := database.DB().First(&admin, adminID).Error; err != nil {
+		response.Error(c, 404, "管理员不存在")
+		return
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(admin.PasswordHash), []byte(req.OldPassword)); err != nil {
+		response.Error(c, 400, "原密码错误")
+		return
+	}
+
+	if req.NewPassword != req.ConfirmPassword {
+		response.Error(c, 400, "两次输入密码不一致")
+		return
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		response.Error(c, 500, "密码加密失败")
+		return
+	}
+
+	if err := database.DB().Model(&admin).Update("password_hash", string(hash)).Error; err != nil {
+		response.Error(c, 500, "更新失败")
+		return
+	}
+
+	response.OK(c, nil)
+}
+
 // AdminUserList 后台用户列表（分页 + 搜索），映射到 DFAN IUserListResponse
 func AdminUserList(c *gin.Context) {
 	var list []model.User
@@ -393,16 +438,11 @@ func AdminUserBatchDelete(c *gin.Context) {
 // UpdateProfile 修改当前用户个人信息（DFAN）
 func UpdateProfile(c *gin.Context) {
 	userIDVal, _ := c.Get("user_id")
-	userID, _ := userIDVal.(uint64)
+	adminID, _ := userIDVal.(uint64)
 
 	var req struct {
 		Username string `json:"username"`
-		Name     string `json:"name"`
-		Phone    string `json:"phone"`
 		Email    string `json:"email"`
-		Avatar   string `json:"avatar"`
-		Bio      string `json:"bio"`
-		Tags     string `json:"tags"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, 400, "请求参数错误")
@@ -416,8 +456,8 @@ func UpdateProfile(c *gin.Context) {
 	}
 
 	var dup int64
-	if err := database.DB().Model(&model.User{}).
-		Where("username = ? AND id <> ?", username, userID).
+	if err := database.DB().Model(&model.Admin{}).
+		Where("username = ? AND id <> ?", username, adminID).
 		Count(&dup).Error; err == nil && dup > 0 {
 		response.Error(c, 400, "username already exists")
 		return
@@ -425,19 +465,10 @@ func UpdateProfile(c *gin.Context) {
 
 	updates := map[string]interface{}{
 		"username": username,
-		"name":     req.Name,
 		"email":    req.Email,
-		"bio":      req.Bio,
-		"tags":     req.Tags,
-	}
-	if req.Phone != "" {
-		updates["phone"] = req.Phone
-	}
-	if req.Avatar != "" {
-		updates["avatar"] = req.Avatar
 	}
 
-	if err := database.DB().Model(&model.User{}).Where("id = ?", userID).
+	if err := database.DB().Model(&model.Admin{}).Where("id = ?", adminID).
 		Updates(updates).Error; err != nil {
 		response.Error(c, 500, "更新失败")
 		return
@@ -581,7 +612,7 @@ func UserPermissions(c *gin.Context) {
 	}
 
 	response.OK(c, gin.H{
-		"menus": roots,
+		"menus":             roots,
 		"buttonPermissions": mergedPerms,
 	})
 }
@@ -589,14 +620,14 @@ func UserPermissions(c *gin.Context) {
 // CurrentUserInfo 返回当前登录用户信息（DFAN）
 func CurrentUserInfo(c *gin.Context) {
 	userIDVal, _ := c.Get("user_id")
-	userID, _ := userIDVal.(uint64)
+	adminID, _ := userIDVal.(uint64)
 
-	var user model.User
-	if err := database.DB().First(&user, userID).Error; err != nil {
-		response.Error(c, 404, "用户不存在")
+	var admin model.Admin
+	if err := database.DB().First(&admin, adminID).Error; err != nil {
+		response.Error(c, 404, "管理员不存在")
 		return
 	}
-	response.OK(c, toUserItem(user))
+	response.OK(c, toAdminItem(admin))
 }
 
 // AddLoginLog 记录登录日志（这里简单丢弃，保证接口成功）
@@ -619,12 +650,40 @@ func toUserItem(u model.User) map[string]interface{} {
 		"avatar":   u.Avatar,
 		"phone":    u.Phone,
 		"email":    u.Email,
-		"roleId":   func() interface{} { if u.RoleID == nil { return nil }; return strconv.FormatUint(*u.RoleID, 10) }(),
-		"status":   statusStr,
+		"roleId": func() interface{} {
+			if u.RoleID == nil {
+				return nil
+			}
+			return strconv.FormatUint(*u.RoleID, 10)
+		}(),
+		"status":     statusStr,
 		"createTime": u.CreatedAt.Format(time.RFC3339),
 		"updateTime": u.UpdatedAt.Format(time.RFC3339),
 		"bio":        u.Bio,
 		"tags":       u.Tags,
+		"loginLogs":  []interface{}{},
+	}
+}
+
+func toAdminItem(a model.Admin) map[string]interface{} {
+	statusStr := "inactive"
+	if a.Status == 1 {
+		statusStr = "active"
+	}
+	return map[string]interface{}{
+		"id":         strconv.FormatUint(a.ID, 10),
+		"username":   a.Username,
+		"password":   "",
+		"name":       a.Username,
+		"avatar":     nil,
+		"phone":      "",
+		"email":      a.Email,
+		"roleId":     nil,
+		"status":     statusStr,
+		"createTime": a.CreatedAt.Format(time.RFC3339),
+		"updateTime": a.UpdatedAt.Format(time.RFC3339),
+		"bio":        "",
+		"tags":       "",
 		"loginLogs":  []interface{}{},
 	}
 }

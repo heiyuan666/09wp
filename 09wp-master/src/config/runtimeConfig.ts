@@ -20,6 +20,8 @@ interface IRuntimeConfig {
   hotSearchEnabled: boolean
   homeRankBoardEnabled: boolean
   doubanCoverProxyUrl: string
+  /** TG 外链封面返代模板（与后台系统配置一致） */
+  tgImageProxyUrl: string
   // 号卡前台按钮（可配置跳转链接）
   haokaOrderUrl?: string
   haokaAgentRegUrl?: string
@@ -45,6 +47,7 @@ const defaultConfig: IRuntimeConfig = {
   hotSearchEnabled: true,
   homeRankBoardEnabled: true,
   doubanCoverProxyUrl: '',
+  tgImageProxyUrl: '',
   haokaOrderUrl: '',
   haokaAgentRegUrl: '',
 }
@@ -150,6 +153,7 @@ export const loadRuntimeConfig = async () => {
         hotSearchEnabled: data.hot_search_enabled ?? true,
         homeRankBoardEnabled: data.home_rank_board_enabled ?? true,
         doubanCoverProxyUrl: data.douban_cover_proxy_url || '',
+        tgImageProxyUrl: data.tg_image_proxy_url || '',
         haokaOrderUrl: data.haoka_order_url || '',
         haokaAgentRegUrl: data.haoka_agent_reg_url || '',
       })

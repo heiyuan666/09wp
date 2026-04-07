@@ -1,4 +1,5 @@
 import request from '@/utils/request'
+import type { ICommonResponse } from '@/types/common'
 import type { IUserDetailResponse } from '@/types/system/user'
 import type {
   ILoginParams,
@@ -9,6 +10,31 @@ import type {
 
 export const login = (params: ILoginParams) => {
   return request.post<ILoginResponse>('/login', params)
+}
+
+/** 管理后台扫码登录：创建会话，二维码内容为 App 可识别的 dfannetdisk://qr-admin-login?sid= */
+export const adminQrLoginCreate = () => {
+  return request.post<
+    ICommonResponse<{
+      sid: string
+      expires_at: string
+      qr_payload: string
+      qr_payload_alt: { type: string; sid: string }
+      for_admin: boolean
+    }>
+  >('/auth/qr/create', { for_admin: true })
+}
+
+/** 轮询管理后台扫码状态：pending | confirmed | expired */
+export const adminQrLoginStatus = (sid: string) => {
+  return request.get<
+    ICommonResponse<{
+      status: string
+      token?: string
+      user?: Record<string, unknown>
+      for_admin?: boolean
+    }>
+  >(`/auth/qr/status/${encodeURIComponent(sid)}`)
 }
 
 /**

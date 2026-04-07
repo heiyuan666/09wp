@@ -11,6 +11,7 @@
     </el-form>
     <div class="actions">
       <el-button type="primary" @click="submit">登录</el-button>
+      <el-button @click="goQrLogin">扫码登录</el-button>
       <el-button @click="goRegister">去注册</el-button>
     </div>
   </el-card>
@@ -32,6 +33,7 @@ const submit = async () => {
 }
 
 const goRegister = () => router.push('/u/register')
+const goQrLogin = () => router.push('/u/login/qr')
 </script>
 
 <style scoped>

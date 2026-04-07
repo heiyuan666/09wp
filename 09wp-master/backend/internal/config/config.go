@@ -143,7 +143,7 @@ func loadFileConfig() *fileConfig {
 func Load() Config {
 	cfg := Config{
 		HTTPPort:        "8080",
-		MySQLDSN:        "pan:pan@tcp(127.0.0.1:3306)/pan?charset=utf8mb4&parseTime=True&loc=Local",
+		MySQLDSN:        "pan:pan@tcp(111.170.19.100:3306/pan?charset=utf8mb4&parseTime=True&loc=Local",
 		JWTSecret:       "dfan-netdisk-dev-secret",
 		PanCheckBaseURL: DefaultPanCheckBaseURL,
 		Redis: RedisConfig{
