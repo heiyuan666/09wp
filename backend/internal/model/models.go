@@ -224,8 +224,12 @@ type SystemConfig struct {
 	// TgImageProxyURL TG 同步等资源的外链封面返代模板，如：https://wsrv.nl/?url=
 	// 仅对 source=telegram 且封面为 http(s) 外链时由前端拼接；本地 /public/covers 不经过此代理。
 	TgImageProxyURL string `gorm:"size:500;default:''" json:"tg_image_proxy_url"`
+	// DoubanSearchCacheTTL 豆瓣信息卡搜索缓存 TTL（秒）。0 表示使用全局 SearchTTL。
+	DoubanSearchCacheTTL int `gorm:"default:0" json:"douban_search_cache_ttl"`
 	// TMDBBearerToken TMDB v4 Read Access Token（用于搜索补充影视信息）。
 	TMDBBearerToken string `gorm:"size:600;default:''" json:"tmdb_bearer_token"`
+	// TMDBSearchCacheTTL TMDB 信息卡搜索缓存 TTL（秒）。0 表示使用全局 SearchTTL。
+	TMDBSearchCacheTTL int `gorm:"default:0" json:"tmdb_search_cache_ttl"`
 	// TMDBProxyURL TMDB 请求代理地址（可选），如：http://127.0.0.1:7890
 	TMDBProxyURL string `gorm:"size:500;default:''" json:"tmdb_proxy_url"`
 	// IYunsAPIBaseURL 聚合搜索/豆瓣信息接口基地址。

@@ -284,12 +284,20 @@ func AdminResourceCreate(c *gin.Context) {
 		return
 	}
 
-	cred, cerr := service.LoadNetdiskCredentials()
-	if cerr == nil && service.ShouldAutoTransferOnCreateMulti(cred, req.Link, res.ExtraLinks) {
-		service.MarkResourceTransferPending(res.ID, "\u7b49\u5f85\u81ea\u52a8\u8f6c\u5b58")
-		go func(rid uint64) {
-			_ = service.TransferResourceWithRetry(rid, 3)
-		}(res.ID)
+	// 开启“详情页自动转存”时：转存应由详情页访问触发，避免后台创建/同步时抢跑。
+	var sysCfg model.SystemConfig
+	detailAutoTransfer := false
+	if err := database.DB().Order("id ASC").First(&sysCfg).Error; err == nil {
+		detailAutoTransfer = sysCfg.ResourceDetailAutoTransfer
+	}
+	if !detailAutoTransfer {
+		cred, cerr := service.LoadNetdiskCredentials()
+		if cerr == nil && service.ShouldAutoTransferOnCreateMulti(cred, req.Link, res.ExtraLinks) {
+			service.MarkResourceTransferPending(res.ID, "\u7b49\u5f85\u81ea\u52a8\u8f6c\u5b58")
+			go func(rid uint64) {
+				_ = service.TransferResourceWithRetry(rid, 3)
+			}(res.ID)
+		}
 	}
 
 	service.MeiliUpsertResourceAsync(res.ID)

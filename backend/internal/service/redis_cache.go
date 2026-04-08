@@ -64,6 +64,17 @@ func SetSearchCache(ctx context.Context, key string, value []byte) {
 	_ = searchRedisClient.Set(ctx, key, value, searchRedisTTL).Err()
 }
 
+// SetSearchCacheWithTTL 写入搜索缓存（指定 TTL，<=0 则使用默认 searchRedisTTL）
+func SetSearchCacheWithTTL(ctx context.Context, key string, value []byte, ttl time.Duration) {
+	if !isSearchRedisEnabled() {
+		return
+	}
+	if ttl <= 0 {
+		ttl = searchRedisTTL
+	}
+	_ = searchRedisClient.Set(ctx, key, value, ttl).Err()
+}
+
 // DeleteSearchCache 删除缓存（用于失效控制）
 func DeleteSearchCache(ctx context.Context, key string) {
 	if !isSearchRedisEnabled() {

@@ -40,7 +40,7 @@ export default function SearchPage(bridge: SearchBridge) {
   const isDark = themeMode === 'dark'
   const siteTitle = runtimeConfig.siteTitle || '09网盘搜索'
   const tmdbPoster = buildProxiedImageSrc(tmdbItem?.poster, String(runtimeConfig.tgImageProxyUrl || '').trim())
-  const doubanPoster = buildProxiedImageSrc(doubanItem?.poster, String(runtimeConfig.tgImageProxyUrl || '').trim())
+  const doubanPoster = buildProxiedImageSrc(doubanItem?.poster, String(runtimeConfig.doubanCoverProxyUrl || '').trim())
 
   return (
     <ConfigProvider locale={zh_CN}>

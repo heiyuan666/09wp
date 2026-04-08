@@ -117,10 +117,14 @@ func PublicTMDBSearch(c *gin.Context) {
 	}
 	token := ""
 	proxyURL := ""
+	cacheTTL := time.Duration(0)
 	var cfg model.SystemConfig
 	if err := database.DB().Order("id ASC").First(&cfg).Error; err == nil {
 		token = strings.TrimSpace(cfg.TMDBBearerToken)
 		proxyURL = strings.TrimSpace(cfg.TMDBProxyURL)
+		if cfg.TMDBSearchCacheTTL > 0 {
+			cacheTTL = time.Duration(cfg.TMDBSearchCacheTTL) * time.Second
+		}
 	}
 	if token == "" {
 		token = strings.TrimSpace(os.Getenv("TMDB_BEARER_TOKEN"))
@@ -140,33 +144,28 @@ func PublicTMDBSearch(c *gin.Context) {
 	}
 	var cached model.TMDBSearchCache
 	if err := database.DB().Where("keyword = ?", keyword).First(&cached).Error; err == nil {
-		if !cached.HasItem {
-			payload := tmdbSearchCachePayload{Enabled: true, Item: nil}
+		// 仅命中「有结果」时短路；HasItem=false 不短路，避免旧逻辑写死的「无结果」永久生效。
+		if cached.HasItem {
+			payload := tmdbSearchCachePayload{
+				Enabled: true,
+				Item: map[string]any{
+					"id":           cached.ItemID,
+					"title":        cached.Title,
+					"overview":     strings.TrimSpace(cached.Overview),
+					"poster":       cached.Poster,
+					"backdrop":     cached.Backdrop,
+					"release_date": cached.ReleaseDate,
+					"rating":       cached.Rating,
+					"media_type":   cached.MediaType,
+					"url":          cached.URL,
+				},
+			}
 			if raw, err := json.Marshal(payload); err == nil {
-				service.SetSearchCache(context.Background(), cacheKey, raw)
+				service.SetSearchCacheWithTTL(context.Background(), cacheKey, raw, cacheTTL)
 			}
 			response.OK(c, payload)
 			return
 		}
-		payload := tmdbSearchCachePayload{
-			Enabled: true,
-			Item: map[string]any{
-				"id":           cached.ItemID,
-				"title":        cached.Title,
-				"overview":     strings.TrimSpace(cached.Overview),
-				"poster":       cached.Poster,
-				"backdrop":     cached.Backdrop,
-				"release_date": cached.ReleaseDate,
-				"rating":       cached.Rating,
-				"media_type":   cached.MediaType,
-				"url":          cached.URL,
-			},
-		}
-		if raw, err := json.Marshal(payload); err == nil {
-			service.SetSearchCache(context.Background(), cacheKey, raw)
-		}
-		response.OK(c, payload)
-		return
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 		// 缓存异常不阻断主流程，继续直连 TMDB
 	}
@@ -207,7 +206,7 @@ func PublicTMDBSearch(c *gin.Context) {
 			},
 		}
 		if raw, err := json.Marshal(payload); err == nil {
-			service.SetSearchCache(context.Background(), cacheKey, raw)
+			service.SetSearchCacheWithTTL(context.Background(), cacheKey, raw, cacheTTL)
 		}
 		response.OK(c, payload)
 		_ = database.DB().Where("keyword = ?", keyword).Assign(model.TMDBSearchCache{
@@ -233,7 +232,7 @@ func PublicTMDBSearch(c *gin.Context) {
 	}).FirstOrCreate(&model.TMDBSearchCache{}).Error
 	payload := tmdbSearchCachePayload{Enabled: true, Item: nil}
 	if raw, err := json.Marshal(payload); err == nil {
-		service.SetSearchCache(context.Background(), cacheKey, raw)
+		service.SetSearchCacheWithTTL(context.Background(), cacheKey, raw, cacheTTL)
 	}
 	response.OK(c, payload)
 }
