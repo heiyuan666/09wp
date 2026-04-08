@@ -72,6 +72,10 @@ func main() {
 	if err := database.SeedSystemConfig(); err != nil {
 		log.Printf("seed system config failed: %v", err)
 	}
+	// 初始化游戏站点配置（独立于网盘系统配置）
+	if err := database.SeedGameSiteConfig(); err != nil {
+		log.Printf("seed game site config failed: %v", err)
+	}
 
 	if err := database.SeedNetdiskCredential(); err != nil {
 		log.Printf("seed netdisk credential failed: %v", err)

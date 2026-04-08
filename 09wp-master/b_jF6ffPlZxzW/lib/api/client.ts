@@ -44,6 +44,36 @@ export async function apiGet<T>(path: string, init?: RequestInit): Promise<T> {
       Accept: "application/json",
       ...(init?.headers ?? {}),
     },
+    cache: init?.cache ?? "no-store",
+  })
+
+  if (!res.ok) {
+    throw new ApiError(`HTTP ${res.status}`, res.status)
+  }
+
+  const json = (await res.json()) as ApiEnvelope<T>
+  if (!json || typeof json.code !== "number") {
+    throw new ApiError("后端返回格式不正确", 500)
+  }
+  if (json.code !== 200) {
+    throw new ApiError(json.message || "请求失败", json.code)
+  }
+  return json.data
+}
+
+export async function apiPost<T>(path: string, body?: unknown, init?: RequestInit): Promise<T> {
+  const baseUrl = getApiBaseUrl()
+  const url = `${baseUrl}${path.startsWith("/") ? "" : "/"}${path}`
+
+  const res = await fetch(url, {
+    ...init,
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      ...(init?.headers ?? {}),
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
     cache: "no-store",
   })
 

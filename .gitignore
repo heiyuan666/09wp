@@ -35,3 +35,6 @@ components.d.ts
 # 本地打包输出
 /release/
 /09wp-master/release/
+
+# 不提交的压缩包产物
+/09wp-master/b_jF6ffPlZxzW.zip

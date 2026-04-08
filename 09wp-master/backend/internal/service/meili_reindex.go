@@ -51,6 +51,35 @@ func ensureMeiliIndexExists(primaryKey string) error {
 	return err
 }
 
+func ensureMeiliGameIndexExists(primaryKey string) error {
+	if !MeiliGameEnabled() {
+		return errors.New("meili disabled")
+	}
+	uid := strings.TrimSpace(meili.cfg.Index)
+	if uid == "" {
+		uid = "resources"
+	}
+	uid = uid + "_games"
+	pk := strings.TrimSpace(primaryKey)
+	if pk == "" {
+		pk = "id"
+	}
+
+	if info, err := meili.client.GetIndex(uid); err == nil {
+		if strings.TrimSpace(info.PrimaryKey) == "" {
+			_, err := meili.gameIdx.UpdateIndex(&meilisearch.UpdateIndexRequestParams{PrimaryKey: pk})
+			return err
+		}
+		return nil
+	}
+
+	_, err := meili.client.CreateIndex(&meilisearch.IndexConfig{
+		Uid:        uid,
+		PrimaryKey: pk,
+	})
+	return err
+}
+
 // MeiliReindexAll 全量重建 resources 索引（从 MySQL 扫描，分批 upsert 到 Meili）
 func MeiliReindexAll(ctx context.Context, batchSize int) (MeiliReindexResult, error) {
 	if !MeiliEnabled() {
@@ -100,6 +129,60 @@ func MeiliReindexAll(ctx context.Context, batchSize int) (MeiliReindexResult, er
 
 	return MeiliReindexResult{
 		Index:     strings.TrimSpace(meili.cfg.Index),
+		BatchSize: batchSize,
+		Total:     total,
+		Indexed:   indexed,
+		Message:   "reindex submitted (async tasks in meilisearch)",
+	}, nil
+}
+
+// MeiliReindexGames 全量重建 games 索引（从 MySQL 扫描，分批 upsert 到 Meili）
+func MeiliReindexGames(ctx context.Context, batchSize int) (MeiliReindexResult, error) {
+	if !MeiliGameEnabled() {
+		return MeiliReindexResult{}, errors.New("meili disabled")
+	}
+	if batchSize <= 0 || batchSize > 2000 {
+		batchSize = 500
+	}
+	if err := ensureMeiliGameIndexExists(meili.cfg.PrimaryKey); err != nil {
+		return MeiliReindexResult{}, err
+	}
+	_ = ensureMeiliGameIndexSettings()
+
+	var total int64
+	if err := database.DB().Model(&model.Game{}).Count(&total).Error; err != nil {
+		return MeiliReindexResult{}, err
+	}
+
+	var indexed int64
+	var lastID uint64
+	for {
+		var rows []model.Game
+		tx := database.DB().Model(&model.Game{}).
+			Where("id > ?", lastID).
+			Order("id ASC").
+			Limit(batchSize).
+			Find(&rows)
+		if tx.Error != nil {
+			return MeiliReindexResult{}, tx.Error
+		}
+		if len(rows) == 0 {
+			break
+		}
+		docs := make([]meiliGameDoc, 0, len(rows))
+		for _, g := range rows {
+			docs = append(docs, toMeiliGameDoc(g))
+			lastID = g.ID
+		}
+		pk := "id"
+		if _, err := meili.gameIdx.AddDocuments(docs, &meilisearch.DocumentOptions{PrimaryKey: &pk}); err != nil {
+			return MeiliReindexResult{}, err
+		}
+		indexed += int64(len(docs))
+	}
+
+	return MeiliReindexResult{
+		Index:     strings.TrimSpace(meili.cfg.Index) + "_games",
 		BatchSize: batchSize,
 		Total:     total,
 		Indexed:   indexed,

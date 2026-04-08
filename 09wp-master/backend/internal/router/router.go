@@ -87,6 +87,12 @@ func SetupRouter(jwtSecret string) *gin.Engine {
 	api.GET("/game/list", handler.GameList)
 	api.GET("/game/detail/:id", handler.GameDetail)
 	api.GET("/game/resource/list", handler.GameResourceList)
+	api.POST("/game/feedbacks", handler.GameFeedbackCreate)
+	api.GET("/game/reviews", handler.GameReviewList)
+	api.POST("/game/reviews", middleware.AuthMiddleware(jwtSecret, false), handler.GameReviewCreate)
+	api.POST("/game/reviews/:id/vote", middleware.AuthMiddleware(jwtSecret, false), handler.GameReviewVote)
+	api.GET("/game/public/config", handler.GetPublicGameSiteConfig)
+	api.GET("/game/public/nav-menus", handler.PublicGameNavMenus)
 	api.POST("/quark/transfer", middleware.AuthMiddleware(jwtSecret, true), handler.QuarkTransferByLink)
 	api.POST("/netdisk/transfer", middleware.AuthMiddleware(jwtSecret, true), handler.NetdiskTransferByLink)
 	api.POST("/netdisk/transfer/batch", middleware.AuthMiddleware(jwtSecret, true), handler.NetdiskTransferBatchByLinks)
@@ -160,6 +166,24 @@ func SetupRouter(jwtSecret string) *gin.Engine {
 	public := api.Group("/public")
 	{
 		public.GET("/nav-menus", handler.PublicNavMenus)
+	}
+
+	// 游戏站点设置（管理端，需管理员权限）
+	gameConfig := api.Group("/game/config")
+	gameConfig.Use(middleware.AuthMiddleware(jwtSecret, true))
+	{
+		gameConfig.GET("", handler.GetGameSiteConfig)
+		gameConfig.PUT("", handler.UpdateGameSiteConfig)
+	}
+
+	// 游戏导航菜单管理（管理端，需管理员权限）
+	gameNavMenus := api.Group("/game/nav-menus")
+	gameNavMenus.Use(middleware.AuthMiddleware(jwtSecret, true))
+	{
+		gameNavMenus.GET("", handler.GameNavMenuList)
+		gameNavMenus.POST("", handler.GameNavMenuCreate)
+		gameNavMenus.PUT("/:id", handler.GameNavMenuUpdate)
+		gameNavMenus.DELETE("/:id", handler.GameNavMenuDelete)
 	}
 
 	// TG 频道管理（独立模块）
@@ -249,6 +273,9 @@ func SetupRouter(jwtSecret string) *gin.Engine {
 		// 反馈管理
 		adminGroup.GET("/feedbacks", handler.AdminFeedbackList)
 		adminGroup.PUT("/feedbacks/:id/status", handler.AdminFeedbackUpdateStatus)
+		// 游戏资源反馈（标记失效等）
+		adminGroup.GET("/game-feedbacks", handler.AdminGameFeedbackList)
+		adminGroup.PUT("/game-feedbacks/:id/status", handler.AdminGameFeedbackUpdateStatus)
 
 		// 用户提交资源（审核）
 		adminGroup.GET("/submissions", handler.AdminSubmissionList)
@@ -279,6 +306,11 @@ func SetupRouter(jwtSecret string) *gin.Engine {
 
 		// 封面/截图上传
 		gameAdmin.POST("/upload", handler.GameUpload)
+
+		// 评论管理（避免与前台 /api/v1/game/reviews 冲突，统一挂到 /game/admin/reviews）
+		gameAdmin.GET("/admin/reviews", handler.AdminGameReviewList)
+		gameAdmin.PUT("/admin/reviews/:id/status", handler.AdminGameReviewSetStatus)
+		gameAdmin.DELETE("/admin/reviews/:id", handler.AdminGameReviewDelete)
 	}
 
 	return r

@@ -1,19 +1,44 @@
 "use client"
 
 import { useState } from "react"
-import { ShoppingCart, Heart, Share2, Gift, Check } from "lucide-react"
+import { Download, Heart, Share2, Gift, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import { copyTextToClipboard, tryNativeShare } from "@/lib/share"
 
 interface PurchaseCardProps {
   price: number
   originalPrice?: number
   discount?: number
+  share?: { title: string; text?: string; url: string }
 }
 
-export function PurchaseCard({ price, originalPrice, discount }: PurchaseCardProps) {
+export function PurchaseCard({ price, originalPrice, discount, share }: PurchaseCardProps) {
   const [isWishlisted, setIsWishlisted] = useState(false)
-  const [isAddedToCart, setIsAddedToCart] = useState(false)
+  const [clicked, setClicked] = useState(false)
+  const [shareMsg, setShareMsg] = useState("")
+
+  const shareCurrentPage = async () => {
+    setShareMsg("")
+    try {
+      const url = share?.url?.trim() || (typeof window !== "undefined" ? window.location.href : "")
+      const title = share?.title?.trim() || (typeof document !== "undefined" ? document.title : "分享")
+      const text = (share?.text || "").trim()
+
+      if (await tryNativeShare({ title, text, url })) {
+        setShareMsg("已打开系统分享")
+        return
+      }
+      const ok = await copyTextToClipboard(url)
+      if (ok) {
+        setShareMsg("已复制页面链接")
+        return
+      }
+      setShareMsg("无法获取当前页面链接")
+    } catch {
+      setShareMsg("分享失败")
+    }
+  }
 
   return (
     <div className="rounded-lg bg-card p-6 space-y-4">
@@ -39,17 +64,17 @@ export function PurchaseCard({ price, originalPrice, discount }: PurchaseCardPro
         <Button 
           className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
           size="lg"
-          onClick={() => setIsAddedToCart(true)}
+          onClick={() => setClicked(true)}
         >
-          {isAddedToCart ? (
+          {clicked ? (
             <>
               <Check className="mr-2 h-5 w-5" />
-              已加入购物车
+              已准备下载
             </>
           ) : (
             <>
-              <ShoppingCart className="mr-2 h-5 w-5" />
-              加入购物车
+              <Download className="mr-2 h-5 w-5" />
+              立即下载
             </>
           )}
         </Button>
@@ -72,10 +97,11 @@ export function PurchaseCard({ price, originalPrice, discount }: PurchaseCardPro
           </Button>
         </div>
         
-        <Button variant="ghost" className="w-full text-muted-foreground hover:text-foreground">
+        <Button variant="ghost" className="w-full text-muted-foreground hover:text-foreground" onClick={shareCurrentPage}>
           <Share2 className="mr-2 h-4 w-4" />
           分享
         </Button>
+        {shareMsg ? <div className="text-xs text-muted-foreground">{shareMsg}</div> : null}
       </div>
 
       {/* Features */}

@@ -11,6 +11,7 @@ export type GameResourceDTO = {
   pan_type: string
   download_url: string
   download_urls: string[]
+  extract_code?: string
   tested: boolean
   author: string
   publish_date?: string
@@ -65,7 +66,7 @@ export type GameDTO = {
 }
 
 export async function fetchGameDetail(id: string | number) {
-  return await apiGet<GameDTO>(`/game/detail/${id}`)
+  return await apiGet<GameDTO>(`/game/detail/${id}`, { cache: "force-cache" })
 }
 
 export type GameListResult = {
@@ -96,11 +97,11 @@ export async function fetchGameList(params: {
   if (typeof params.category_id === "number") qs.set("category_id", String(params.category_id))
   if (params.type) qs.set("type", params.type)
   const query = qs.toString()
-  return await apiGet<GameListResult>(`/game/list${query ? `?${query}` : ""}`)
+  return await apiGet<GameListResult>(`/game/list${query ? `?${query}` : ""}`, { cache: "force-cache" })
 }
 
 export async function fetchGameCategoryList() {
-  return await apiGet<GameCategoryDTO[]>(`/game/category/list`)
+  return await apiGet<GameCategoryDTO[]>(`/game/category/list`, { cache: "force-cache" })
 }
 
 export function getBackendOriginFromApiBaseUrl() {

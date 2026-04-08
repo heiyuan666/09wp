@@ -5,50 +5,16 @@ import Image from "next/image"
 import Link from "next/link"
 import { Search, X, Clock, TrendingUp, Star } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { fetchGameList, absolutizeGameMediaUrls, splitToList } from "@/lib/api/game"
 
 interface SearchResult {
-  id: string
+  id: number
   title: string
   image: string
   price: string
   rating: number
   genre: string
 }
-
-const mockResults: SearchResult[] = [
-  {
-    id: "1",
-    title: "赛博朋克 2077",
-    image: "/images/game-cover.jpg",
-    price: "298",
-    rating: 4.5,
-    genre: "角色扮演",
-  },
-  {
-    id: "2",
-    title: "星际远征",
-    image: "/images/featured-1.jpg",
-    price: "328",
-    rating: 4.2,
-    genre: "科幻",
-  },
-  {
-    id: "3",
-    title: "龙焰纪元",
-    image: "/images/featured-2.jpg",
-    price: "268",
-    rating: 4.6,
-    genre: "动作",
-  },
-  {
-    id: "4",
-    title: "极速狂飙",
-    image: "/images/featured-3.jpg",
-    price: "198",
-    rating: 4.3,
-    genre: "竞速",
-  },
-]
 
 const recentSearches = ["赛博朋克", "开放世界", "角色扮演", "科幻游戏"]
 const trendingSearches = ["艾尔登法环", "博德之门3", "原神", "黑神话悟空", "星空"]
@@ -61,6 +27,7 @@ interface SearchModalProps {
 export function SearchModal({ isOpen, onClose }: SearchModalProps) {
   const [query, setQuery] = useState("")
   const [results, setResults] = useState<SearchResult[]>([])
+  const [loading, setLoading] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -70,15 +37,38 @@ export function SearchModal({ isOpen, onClose }: SearchModalProps) {
   }, [isOpen])
 
   useEffect(() => {
-    if (query.length > 0) {
-      const filtered = mockResults.filter(game => 
-        game.title.toLowerCase().includes(query.toLowerCase()) ||
-        game.genre.toLowerCase().includes(query.toLowerCase())
-      )
-      setResults(filtered)
-    } else {
+    const q = query.trim()
+    if (!q) {
       setResults([])
+      return
     }
+
+    const handle = setTimeout(async () => {
+      setLoading(true)
+      try {
+        const res = await fetchGameList({ page: 1, page_size: 10, keyword: q })
+        const list = (res.list || []).map(absolutizeGameMediaUrls)
+        const mapped: SearchResult[] = list.map((g) => {
+          const genres = splitToList(g.genres)
+          const tags = splitToList(g.tags)
+          const genre = (genres[0] || tags[0] || "").trim()
+          const priceText = g.price_final === 0 || g.price_text === "免费" ? "免费" : String(Math.round((g.price_final || 0) / 100))
+          return {
+            id: g.id,
+            title: g.title,
+            image: g.cover || g.header_image || "/images/game-cover.jpg",
+            price: priceText,
+            rating: Number(g.rating || 0),
+            genre: genre || "游戏",
+          }
+        })
+        setResults(mapped)
+      } finally {
+        setLoading(false)
+      }
+    }, 250)
+
+    return () => clearTimeout(handle)
   }, [query])
 
   useEffect(() => {
@@ -194,10 +184,12 @@ export function SearchModal({ isOpen, onClose }: SearchModalProps) {
                       <h3 className="font-semibold text-foreground truncate">{result.title}</h3>
                       <div className="flex items-center gap-3 text-sm text-muted-foreground">
                         <span>{result.genre}</span>
-                        <div className="flex items-center gap-1">
-                          <Star className="h-3 w-3 fill-primary text-primary" />
-                          <span>{result.rating}</span>
-                        </div>
+                        {!!result.rating && (
+                          <div className="flex items-center gap-1">
+                            <Star className="h-3 w-3 fill-primary text-primary" />
+                            <span>{result.rating}</span>
+                          </div>
+                        )}
                       </div>
                     </div>
                     <span className="text-lg font-bold text-foreground">¥{result.price}</span>
@@ -206,8 +198,14 @@ export function SearchModal({ isOpen, onClose }: SearchModalProps) {
               </div>
             ) : (
               <div className="py-12 text-center">
-                <p className="text-muted-foreground">未找到相关游戏</p>
-                <p className="text-sm text-muted-foreground mt-1">请尝试其他关键词</p>
+                {loading ? (
+                  <p className="text-muted-foreground">搜索中...</p>
+                ) : (
+                  <>
+                    <p className="text-muted-foreground">未找到相关游戏</p>
+                    <p className="text-sm text-muted-foreground mt-1">请尝试其他关键词</p>
+                  </>
+                )}
               </div>
             )}
           </div>

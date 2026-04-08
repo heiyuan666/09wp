@@ -3,7 +3,7 @@
 import { useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
-import { Heart, ShoppingCart, Star, Clock } from "lucide-react"
+import { Heart, Download, Star, Clock } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
@@ -90,8 +90,8 @@ export function GameCard({
           isHovered ? "opacity-100" : "opacity-0"
         )}>
           <Button className="w-full gap-2" size="sm">
-            <ShoppingCart className="h-4 w-4" />
-            加入购物车
+            <Download className="h-4 w-4" />
+            立即下载
           </Button>
         </div>
       </Link>

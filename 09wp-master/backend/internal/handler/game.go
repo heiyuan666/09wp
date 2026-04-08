@@ -17,6 +17,7 @@ import (
 
 	"dfan-netdisk-backend/internal/database"
 	"dfan-netdisk-backend/internal/model"
+	"dfan-netdisk-backend/internal/service"
 	"dfan-netdisk-backend/pkg/response"
 	"github.com/gin-gonic/gin"
 )
@@ -224,6 +225,7 @@ type gameResourceDTO struct {
 	PanType      string     `json:"pan_type"`
 	DownloadURL  string     `json:"download_url"`
 	DownloadURLs []string   `json:"download_urls"`
+	ExtractCode  string     `json:"extract_code"`
 	Tested       bool       `json:"tested"`
 	Author       string     `json:"author"`
 	PublishDate  *time.Time `json:"publish_date,omitempty"`
@@ -294,6 +296,7 @@ func toGameResourceDTO(item model.GameResource) gameResourceDTO {
 		PanType:      item.PanType,
 		DownloadURL:  item.DownloadURL,
 		DownloadURLs: links,
+		ExtractCode:  strings.TrimSpace(item.ExtractCode),
 		Tested:       item.Tested,
 		Author:       item.Author,
 		PublishDate:  item.PublishDate,
@@ -840,6 +843,8 @@ func GameCreate(c *gin.Context) {
 		gameErr(c, "create game failed")
 		return
 	}
+	// async upsert to meili games index (best-effort)
+	service.MeiliUpsertGameAsync(item.ID)
 	gameOK(c, toGameDTO(item))
 }
 
@@ -1029,6 +1034,7 @@ func GameUpdate(c *gin.Context) {
 		gameErr(c, "update game failed")
 		return
 	}
+	service.MeiliUpsertGameAsync(id)
 	gameOK(c, struct{}{})
 }
 
@@ -1059,22 +1065,56 @@ func GameDelete(c *gin.Context) {
 		gameErr(c, "delete game failed")
 		return
 	}
+	service.MeiliDeleteGameAsync(id)
 	gameOK(c, struct{}{})
 }
 
 func GameList(c *gin.Context) {
-	var (
-		db   = database.DB().Model(&model.Game{})
-		list []model.Game
-	)
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	if page < 1 {
+		page = 1
+	}
+	if pageSize <= 0 || pageSize > 100 {
+		pageSize = 20
+	}
+	keyword := strings.TrimSpace(c.Query("keyword"))
+	cid := strings.TrimSpace(c.Query("category_id"))
+	typ := strings.TrimSpace(c.Query("type"))
 
-	if keyword := strings.TrimSpace(c.Query("keyword")); keyword != "" {
+	// Prefer Meili when enabled (keyword can be empty to list all)
+	if service.MeiliGameEnabled() {
+		out, err := service.SearchGamesByMeili(c.Request.Context(), service.MeiliGameSearchParams{
+			Query:      keyword,
+			Page:       page,
+			PageSize:   pageSize,
+			Sort:       strings.TrimSpace(c.DefaultQuery("sort", "latest")),
+			CategoryID: cid,
+			Type:       typ,
+		})
+		if err == nil {
+			data := make([]gameDTO, 0, len(out.List))
+			for _, item := range out.List {
+				data = append(data, toGameDTO(item))
+			}
+			gameOK(c, gin.H{
+				"list":  data,
+				"total": out.Total,
+			})
+			return
+		}
+		// fallback to mysql
+		service.MeiliTryLog(err)
+	}
+
+	db := database.DB().Model(&model.Game{})
+	if keyword != "" {
 		db = db.Where("title LIKE ?", "%"+keyword+"%")
 	}
-	if cid := strings.TrimSpace(c.Query("category_id")); cid != "" {
+	if cid != "" {
 		db = db.Where("category_id = ?", cid)
 	}
-	if typ := strings.TrimSpace(c.Query("type")); typ != "" {
+	if typ != "" {
 		db = db.Where("type = ?", typ)
 	}
 
@@ -1084,15 +1124,7 @@ func GameList(c *gin.Context) {
 		return
 	}
 
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
-	if page < 1 {
-		page = 1
-	}
-	if pageSize <= 0 || pageSize > 100 {
-		pageSize = 20
-	}
-
+	var list []model.Game
 	if err := db.Order("id DESC").Limit(pageSize).Offset((page - 1) * pageSize).Find(&list).Error; err != nil {
 		gameErr(c, "query game list failed")
 		return
@@ -1146,6 +1178,7 @@ func GameResourceCreate(c *gin.Context) {
 		PanType      string   `json:"pan_type"`
 		DownloadURL  string   `json:"download_url" binding:"required"`
 		DownloadURLs []string `json:"download_urls"`
+		ExtractCode  string   `json:"extract_code"`
 		Tested       bool     `json:"tested"`
 		Author       string   `json:"author"`
 		PublishDate  string   `json:"publish_date"`
@@ -1183,6 +1216,7 @@ func GameResourceCreate(c *gin.Context) {
 		DownloadType: strings.TrimSpace(req.DownloadType),
 		PanType:      mergePanType(req.PanType, links),
 		DownloadURL:  mergedURL,
+		ExtractCode:  strings.TrimSpace(req.ExtractCode),
 		Tested:       req.Tested,
 		Author:       strings.TrimSpace(req.Author),
 		PublishDate:  publishDate,
@@ -1210,6 +1244,7 @@ func GameResourceUpdate(c *gin.Context) {
 		PanType      string   `json:"pan_type"`
 		DownloadURL  string   `json:"download_url"`
 		DownloadURLs []string `json:"download_urls"`
+		ExtractCode  string   `json:"extract_code"`
 		Tested       *bool    `json:"tested"`
 		Author       string   `json:"author"`
 		PublishDate  string   `json:"publish_date"`
@@ -1234,6 +1269,9 @@ func GameResourceUpdate(c *gin.Context) {
 	}
 	if req.DownloadType != "" {
 		updates["download_type"] = strings.TrimSpace(req.DownloadType)
+	}
+	if req.ExtractCode != "" {
+		updates["extract_code"] = strings.TrimSpace(req.ExtractCode)
 	}
 	if req.PanType != "" {
 		updates["pan_type"] = strings.TrimSpace(req.PanType)

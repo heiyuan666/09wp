@@ -418,7 +418,7 @@ func AdminMeiliTest(c *gin.Context) {
 	})
 }
 
-// AdminMeiliReindex 全量重建 Meili 索引（从 MySQL 导入 resources）
+// AdminMeiliReindex 全量重建 Meili 索引（从 MySQL 导入）
 func AdminMeiliReindex(c *gin.Context) {
 	// 每次重建前按 DB 系统配置尝试初始化 Meili，避免后端启动时 meili=disabled 导致无法重建
 	var cfg model.SystemConfig
@@ -436,7 +436,16 @@ func AdminMeiliReindex(c *gin.Context) {
 	})
 
 	batchSize := service.ParseBatchSize(c.DefaultQuery("batch_size", "500"))
-	out, err := service.MeiliReindexAll(c.Request.Context(), batchSize)
+	target := strings.TrimSpace(c.DefaultQuery("target", "resources")) // resources | games
+	var (
+		out service.MeiliReindexResult
+		err error
+	)
+	if target == "games" {
+		out, err = service.MeiliReindexGames(c.Request.Context(), batchSize)
+	} else {
+		out, err = service.MeiliReindexAll(c.Request.Context(), batchSize)
+	}
 	if err != nil {
 		response.Error(c, 500, "重建索引失败: "+err.Error())
 		return

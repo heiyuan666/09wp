@@ -265,6 +265,31 @@ type NavigationMenu struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
+// GameSiteConfig 游戏站点专用配置（独立于网盘 SystemConfig）
+type GameSiteConfig struct {
+	ID             uint64    `gorm:"primaryKey" json:"id"`
+	SiteTitle      string    `gorm:"size:120;default:''" json:"site_title"`
+	LogoURL        string    `gorm:"size:255;default:''" json:"logo_url"`
+	FaviconURL     string    `gorm:"size:255;default:''" json:"favicon_url"`
+	SeoKeywords    string    `gorm:"size:255;default:''" json:"seo_keywords"`
+	SeoDescription string    `gorm:"size:500;default:''" json:"seo_description"`
+	UpdatedBy      uint64    `gorm:"default:0" json:"updated_by"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+}
+
+// GameNavigationMenu 游戏站点专用导航菜单（独立于网盘 NavigationMenu）
+type GameNavigationMenu struct {
+	ID        uint64    `gorm:"primaryKey" json:"id"`
+	Title     string    `gorm:"size:100;not null" json:"title"`
+	Path      string    `gorm:"size:255;not null;default:''" json:"path"`
+	Position  string    `gorm:"size:32;not null;index" json:"position"` // top_nav / home_promo
+	SortOrder int       `gorm:"default:0" json:"sort_order"`
+	Visible   bool      `gorm:"default:true" json:"visible"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
 // TMDBSearchCache TMDB 搜索缓存，避免每次都请求外网接口。
 type TMDBSearchCache struct {
 	ID          uint64    `gorm:"primaryKey" json:"id"`

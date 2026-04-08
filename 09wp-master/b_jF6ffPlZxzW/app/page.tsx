@@ -5,6 +5,9 @@ import { DealsSection, type Deal } from "@/components/home/deals-section"
 import { TrendingSection, type GameCardItem, type TrendingTabId } from "@/components/home/trending-section"
 import { Footer } from "@/components/home/footer"
 import { absolutizeGameMediaUrls, fetchGameCategoryList, fetchGameList, splitToList } from "@/lib/api/game"
+import { redirect } from "next/navigation"
+
+export const revalidate = 300
 
 function centsToYuanText(cents: number) {
   if (!Number.isFinite(cents) || cents <= 0) return "0"
@@ -80,6 +83,9 @@ export default async function HomePage({
 }) {
   const resolvedSearch = (await searchParams) || {}
   const selectedCategory = (resolvedSearch.category || "").trim()
+  if (selectedCategory) {
+    redirect(`/category/${encodeURIComponent(selectedCategory)}`)
+  }
 
   const [catList, listRes] = await Promise.all([
     fetchGameCategoryList(),
@@ -87,9 +93,7 @@ export default async function HomePage({
   ])
 
   const allGames = (listRes.list || []).map(absolutizeGameMediaUrls)
-  const scopedGames = selectedCategory
-    ? allGames.filter((g) => String(g.category_id || "") === selectedCategory)
-    : allGames
+  const scopedGames = allGames
 
   // 热门：按 downloads / likes / rating 做一个简单混合排序
   const trendingSorted = [...scopedGames].sort((a, b) => {

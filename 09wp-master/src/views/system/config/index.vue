@@ -199,8 +199,11 @@
         <el-button class="ml8" type="primary" plain :loading="meiliTesting" @click="testMeili">
           测试连接
         </el-button>
-        <el-button class="ml8" type="warning" plain :loading="meiliReindexing" @click="reindexMeili">
-          重建索引
+        <el-button class="ml8" type="warning" plain :loading="meiliReindexing" @click="reindexMeili('resources')">
+          重建资源索引
+        </el-button>
+        <el-button class="ml8" type="warning" plain :loading="meiliReindexing" @click="reindexMeili('games')">
+          重建游戏索引
         </el-button>
       </el-form-item>
 
@@ -425,12 +428,13 @@ const testMeili = async () => {
   }
 }
 
-const reindexMeili = async () => {
+const reindexMeili = async (target: 'resources' | 'games' = 'resources') => {
   meiliReindexing.value = true
   try {
-    const { data: res } = await meiliReindex(500)
+    const { data: res } = await meiliReindex(500, target)
     if (res.code !== 200) return
-    ElMessage.success(`已提交重建：indexed=${res.data?.indexed ?? 0} / total=${res.data?.total ?? 0}`)
+    const tip = target === 'games' ? '游戏索引' : '资源索引'
+    ElMessage.success(`已提交重建${tip}：indexed=${res.data?.indexed ?? 0} / total=${res.data?.total ?? 0}`)
   } finally {
     meiliReindexing.value = false
   }

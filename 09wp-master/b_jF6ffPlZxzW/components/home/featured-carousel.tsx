@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import Image from "next/image"
+import Link from "next/link"
 import { ChevronLeft, ChevronRight, Play } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -22,10 +23,12 @@ export function FeaturedCarousel({ games }: { games: FeaturedGame[] }) {
   const [isAutoPlaying, setIsAutoPlaying] = useState(true)
 
   const nextSlide = useCallback(() => {
+    if (!games?.length) return
     setCurrentIndex((prev) => (prev + 1) % games.length)
-  }, [])
+  }, [games])
 
   const prevSlide = () => {
+    if (!games?.length) return
     setCurrentIndex((prev) => (prev - 1 + games.length) % games.length)
   }
 
@@ -35,7 +38,12 @@ export function FeaturedCarousel({ games }: { games: FeaturedGame[] }) {
     return () => clearInterval(interval)
   }, [isAutoPlaying, nextSlide])
 
-  const currentGame = games[currentIndex]
+  const currentGame = games?.[currentIndex]
+  const tags = currentGame?.tags ?? []
+
+  if (!currentGame) {
+    return null
+  }
 
   return (
     <section 
@@ -72,7 +80,7 @@ export function FeaturedCarousel({ games }: { games: FeaturedGame[] }) {
             <div className="max-w-xl">
               {/* Tags */}
               <div className="flex flex-wrap gap-2 mb-4">
-                {currentGame.tags.map((tag) => (
+                {tags.map((tag) => (
                   <span
                     key={tag}
                     className="rounded-full bg-primary/20 px-3 py-1 text-xs font-medium text-primary"
@@ -116,9 +124,11 @@ export function FeaturedCarousel({ games }: { games: FeaturedGame[] }) {
                     </span>
                   </div>
                 </div>
-                <Button size="lg" className="gap-2">
-                  <Play className="h-4 w-4" />
-                  立即购买
+                <Button size="lg" className="gap-2" asChild>
+                  <Link href={`/${currentGame.id}#download`}>
+                    <Play className="h-4 w-4" />
+                    立即下载
+                  </Link>
                 </Button>
                 <Button size="lg" variant="secondary">
                   了解更多
