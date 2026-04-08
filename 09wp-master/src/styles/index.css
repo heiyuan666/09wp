@@ -1,6 +1,7 @@
 @import '@/styles/theme.css'; /* 主题样式 */
 @import '@/styles/transitionAnimation.css'; /* 内置transition动画样式 */
 @import '@/styles/nprogress.css'; /* NProgress 进度条样式 */
+@import '@/styles/gamestore-theme.css'; /* GameStore tokens（用于 games/:id 1:1 复刻） */
 @import '@/styles/common.scss'; /* 公共样式 */
 @import 'tailwindcss'; /* Tailwind CSS 样式 */
 

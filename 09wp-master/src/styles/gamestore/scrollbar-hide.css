@@ -1,0 +1,12 @@
+/* 隐藏滚动条（仅用于 gamestore React 页面横向滚动条） */
+
+.scrollbar-hide::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none; /* IE/Edge */
+  scrollbar-width: none; /* Firefox */
+}
+

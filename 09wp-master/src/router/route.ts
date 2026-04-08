@@ -38,7 +38,7 @@ export const staticRoutes = [
       {
         path: 'games/:id',
         name: 'PublicGameDetailView',
-        component: () => import('@/views/public/game/detail.vue'),
+        component: () => import('@/views/public/game/detail.react-host.vue'),
         meta: { public: true, keepAlive: false },
       },
       {
