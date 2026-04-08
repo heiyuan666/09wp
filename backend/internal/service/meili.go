@@ -22,6 +22,7 @@ type meiliState struct {
 	cfg     config.MeiliConfig
 	client  meilisearch.ServiceManager
 	index   meilisearch.IndexManager
+	gameIdx meilisearch.IndexManager
 }
 
 var meili meiliState
@@ -53,7 +54,7 @@ type meiliResourceDoc struct {
 }
 
 func InitMeili(cfg config.MeiliConfig) error {
-	meili = meiliState{enabled: false, cfg: cfg, client: nil, index: nil}
+	meili = meiliState{enabled: false, cfg: cfg, client: nil, index: nil, gameIdx: nil}
 	if !cfg.Enabled {
 		return nil
 	}
@@ -72,20 +73,33 @@ func InitMeili(cfg config.MeiliConfig) error {
 		idxName = "resources"
 	}
 	index := client.Index(idxName)
+	// 游戏索引：默认使用 resources 的后缀，避免引入新配置字段
+	gameIndexName := strings.TrimSpace(cfg.Index)
+	if gameIndexName == "" {
+		gameIndexName = "resources"
+	}
+	gameIndexName = gameIndexName + "_games"
+	gameIndex := client.Index(gameIndexName)
 	meili.client = client
 	meili.index = index
+	meili.gameIdx = gameIndex
 	meili.enabled = true
 
 	// 尽力初始化索引设置（失败不阻断启动；搜索时会自动回退 MySQL）
 	go func() {
 		defer func() { recover() }()
 		_ = ensureMeiliIndexSettings()
+		_ = ensureMeiliGameIndexSettings()
 	}()
 	return nil
 }
 
 func MeiliEnabled() bool {
 	return meili.enabled && meili.index != nil
+}
+
+func MeiliGameEnabled() bool {
+	return meili.enabled && meili.gameIdx != nil
 }
 
 func ensureMeiliIndexSettings() error {
@@ -106,6 +120,210 @@ func ensureMeiliIndexSettings() error {
 		"extract_code",
 	})
 	return nil
+}
+
+type meiliGameDoc struct {
+	ID uint64 `json:"id"`
+
+	Title            string `json:"title"`
+	ShortDescription string `json:"short_description"`
+	Developers       string `json:"developers"`
+	Publishers       string `json:"publishers"`
+	Platforms        string `json:"platforms"`
+	Genres           string `json:"genres"`
+	Tags             string `json:"tags"`
+
+	Cover       string `json:"cover"`
+	HeaderImage string `json:"header_image"`
+	VideoURL    string `json:"video_url"`
+
+	CategoryID  uint64 `json:"category_id"`
+	Type        string `json:"type"`
+	SteamAppID  uint64 `json:"steam_appid"`
+	IsFree      bool   `json:"is_free"`
+
+	Rating          float64 `json:"rating"`
+	Downloads       uint64  `json:"downloads"`
+	Recommendations uint64  `json:"recommendations_total"`
+
+	CreatedAtTS int64 `json:"created_at_ts"`
+	UpdatedAtTS int64 `json:"updated_at_ts"`
+}
+
+func toMeiliGameDoc(g model.Game) meiliGameDoc {
+	var cid uint64
+	if g.CategoryID != nil {
+		cid = *g.CategoryID
+	}
+	return meiliGameDoc{
+		ID:               g.ID,
+		Title:            strings.TrimSpace(g.Title),
+		ShortDescription: strings.TrimSpace(g.ShortDescription),
+		Developers:       strings.TrimSpace(g.Developers),
+		Publishers:       strings.TrimSpace(g.Publishers),
+		Platforms:        strings.TrimSpace(g.Platforms),
+		Genres:           strings.TrimSpace(g.Genres),
+		Tags:             strings.TrimSpace(g.Tags),
+		Cover:            strings.TrimSpace(g.Cover),
+		HeaderImage:      strings.TrimSpace(g.HeaderImage),
+		VideoURL:         strings.TrimSpace(g.VideoURL),
+		CategoryID:       cid,
+		Type:             strings.TrimSpace(g.Type),
+		SteamAppID:       g.SteamAppID,
+		IsFree:           g.IsFree,
+		Rating:           g.Rating,
+		Downloads:        g.Downloads,
+		Recommendations:  g.Recommendations,
+		CreatedAtTS:      g.CreatedAt.Unix(),
+		UpdatedAtTS:      g.UpdatedAt.Unix(),
+	}
+}
+
+func ensureMeiliGameIndexSettings() error {
+	if !MeiliGameEnabled() {
+		return nil
+	}
+	_, _ = meili.gameIdx.UpdateSortableAttributes(&[]string{"created_at_ts", "downloads", "rating"})
+	_, _ = meili.gameIdx.UpdateFilterableAttributes(&[]interface{}{"category_id", "type", "is_free"})
+	_, _ = meili.gameIdx.UpdateSearchableAttributes(&[]string{
+		"title",
+		"short_description",
+		"developers",
+		"publishers",
+		"platforms",
+		"genres",
+		"tags",
+	})
+	return nil
+}
+
+// EscapeMeiliFilterValue escapes quotes/backslashes in filter string values.
+func EscapeMeiliFilterValue(s string) string {
+	s = strings.ReplaceAll(s, "\\", "\\\\")
+	s = strings.ReplaceAll(s, "\"", "\\\"")
+	return s
+}
+
+func MeiliUpsertGameAsync(id uint64) {
+	if !MeiliGameEnabled() || id == 0 {
+		return
+	}
+	go func() {
+		defer func() { recover() }()
+		var g model.Game
+		if err := database.DB().Where("id = ?", id).First(&g).Error; err != nil {
+			return
+		}
+		pk := "id"
+		_, _ = meili.gameIdx.AddDocuments([]meiliGameDoc{toMeiliGameDoc(g)}, &meilisearch.DocumentOptions{
+			PrimaryKey: &pk,
+		})
+	}()
+}
+
+func MeiliDeleteGameAsync(id uint64) {
+	if !MeiliGameEnabled() || id == 0 {
+		return
+	}
+	go func() {
+		defer func() { recover() }()
+		_, _ = meili.gameIdx.DeleteDocument(strconv.FormatUint(id, 10), nil)
+	}()
+}
+
+type MeiliGameSearchParams struct {
+	Query      string
+	Page       int
+	PageSize   int
+	Sort       string // latest/hot/rating (optional)
+	CategoryID string
+	Type       string
+}
+
+type MeiliGameSearchResult struct {
+	List  []model.Game
+	Total int64
+}
+
+func SearchGamesByMeili(ctx context.Context, p MeiliGameSearchParams) (MeiliGameSearchResult, error) {
+	if !MeiliGameEnabled() {
+		return MeiliGameSearchResult{}, errors.New("meili disabled")
+	}
+	page := p.Page
+	if page <= 0 {
+		page = 1
+	}
+	pageSize := p.PageSize
+	if pageSize <= 0 || pageSize > 100 {
+		pageSize = 20
+	}
+	offset := (page - 1) * pageSize
+
+	filters := make([]string, 0, 3)
+	if strings.TrimSpace(p.CategoryID) != "" {
+		filters = append(filters, "category_id = "+strings.TrimSpace(p.CategoryID))
+	}
+	if strings.TrimSpace(p.Type) != "" {
+		// string filter needs quotes
+		filters = append(filters, "type = \""+EscapeMeiliFilterValue(strings.TrimSpace(p.Type))+"\"")
+	}
+	filter := strings.Join(filters, " AND ")
+
+	sort := []string(nil)
+	switch strings.TrimSpace(p.Sort) {
+	case "rating":
+		sort = []string{"rating:desc", "created_at_ts:desc"}
+	case "hot":
+		sort = []string{"downloads:desc", "created_at_ts:desc"}
+	default:
+		sort = []string{"created_at_ts:desc"}
+	}
+
+	q := strings.TrimSpace(p.Query)
+	resp, err := meili.gameIdx.Search(q, &meilisearch.SearchRequest{
+		Limit:  int64(pageSize),
+		Offset: int64(offset),
+		Filter: filter,
+		Sort:   sort,
+	})
+	if err != nil {
+		return MeiliGameSearchResult{}, err
+	}
+
+	// Decode hits into docs, then load from DB by IDs to keep fields consistent
+	type hit struct {
+		ID uint64 `json:"id"`
+	}
+	hitsBytes, _ := json.Marshal(resp.Hits)
+	var hits []hit
+	_ = json.Unmarshal(hitsBytes, &hits)
+	ids := make([]uint64, 0, len(hits))
+	for _, h := range hits {
+		if h.ID > 0 {
+			ids = append(ids, h.ID)
+		}
+	}
+	if len(ids) == 0 {
+		return MeiliGameSearchResult{List: []model.Game{}, Total: int64(resp.EstimatedTotalHits)}, nil
+	}
+
+	// Keep order as hits order
+	var rows []model.Game
+	if err := database.DB().Model(&model.Game{}).Where("id IN ?", ids).Find(&rows).Error; err != nil {
+		return MeiliGameSearchResult{}, err
+	}
+	byID := make(map[uint64]model.Game, len(rows))
+	for _, r := range rows {
+		byID[r.ID] = r
+	}
+	out := make([]model.Game, 0, len(ids))
+	for _, id := range ids {
+		if r, ok := byID[id]; ok {
+			out = append(out, r)
+		}
+	}
+
+	return MeiliGameSearchResult{List: out, Total: int64(resp.EstimatedTotalHits)}, nil
 }
 
 func toMeiliResourceDoc(res model.Resource) meiliResourceDoc {

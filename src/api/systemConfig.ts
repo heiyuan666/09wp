@@ -90,5 +90,7 @@ export const updateSystemConfig = (data: ISystemConfig) =>
 
 export const meiliTest = () => request.post<ICommonResponse<any>>('/system/config/meili/test')
 
-export const meiliReindex = (batch_size = 500) =>
-  request.post<ICommonResponse<any>>(`/system/config/meili/reindex?batch_size=${batch_size}`)
+export const meiliReindex = (batch_size = 500, target: 'resources' | 'games' = 'resources') =>
+  request.post<ICommonResponse<any>>(
+    `/system/config/meili/reindex?batch_size=${batch_size}&target=${encodeURIComponent(target)}`,
+  )

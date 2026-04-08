@@ -137,7 +137,7 @@ func buildCaptchaSVG(code string) string {
   <path d="M10 12 C 34 30, 52 8, 78 26 S 102 10, 116 28" stroke="#E2E8F0" stroke-width="2" fill="none" opacity="0.9"/>
   <text x="60" y="27" text-anchor="middle" font-size="22" font-weight="800"
         font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto" fill="#111827"
-        letter-spacing="6">%s</text>
+        textLength="92" lengthAdjust="spacingAndGlyphs">%s</text>
 </svg>`,
 		code,
 	)

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { 
   Download, 
   Heart, 
@@ -17,6 +17,8 @@ import {
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import { copyTextToClipboard, tryNativeShare } from "@/lib/share"
+import { createGameResourceFeedback } from "@/lib/api/feedback"
 
 type PanType = "quark" | "aliyun" | "baidu" | "lanzou" | "123pan" | "tianyi" | "mega" | "onedrive"
 
@@ -29,6 +31,10 @@ interface DownloadLink {
   size: string
   speed: "fast" | "medium" | "slow"
   isRecommended?: boolean
+  sourceLabel?: string
+  author?: string
+  gameId?: number
+  gameResourceId?: number
 }
 
 interface DownloadCardProps {
@@ -36,6 +42,7 @@ interface DownloadCardProps {
   updateDate: string
   version: string
   downloads?: DownloadLink[]
+  share?: { title: string; text?: string; url: string }
 }
 
 // 网盘颜色和标签配置
@@ -124,11 +131,15 @@ export function DownloadCard({
   fileSize, 
   updateDate, 
   version,
-  downloads = defaultDownloads 
+  downloads = defaultDownloads,
+  share,
 }: DownloadCardProps) {
   const [isWishlisted, setIsWishlisted] = useState(false)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [showAllLinks, setShowAllLinks] = useState(false)
+  const [shareMsg, setShareMsg] = useState("")
+  const [nativeShareAvailable, setNativeShareAvailable] = useState(false)
+  const [reportingId, setReportingId] = useState<string>("")
 
   const copyPassword = (id: string, password: string) => {
     navigator.clipboard.writeText(password)
@@ -139,6 +150,66 @@ export function DownloadCard({
   const copyLink = (url: string, password?: string) => {
     const text = password ? `${url}\n提取码: ${password}` : url
     navigator.clipboard.writeText(text)
+  }
+
+  const shareCurrentPage = async () => {
+    setShareMsg("")
+    try {
+      const url = share?.url?.trim() || (typeof window !== "undefined" ? window.location.href : "")
+      const title = share?.title?.trim() || (typeof document !== "undefined" ? document.title : "分享")
+      const text = (share?.text || "").trim()
+
+      if (await tryNativeShare({ title, text, url })) {
+        setShareMsg("已打开系统分享")
+        return
+      }
+      const ok = await copyTextToClipboard(url)
+      if (ok) {
+        setShareMsg("已复制页面链接")
+        return
+      }
+      setShareMsg("无法获取当前页面链接")
+    } catch {
+      setShareMsg("分享失败")
+    }
+  }
+
+  const copyShareLink = async () => {
+    setShareMsg("")
+    const url = share?.url?.trim() || (typeof window !== "undefined" ? window.location.href : "")
+    const ok = await copyTextToClipboard(url)
+    setShareMsg(ok ? "已复制页面链接" : "复制失败")
+  }
+
+  useEffect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const navAny: any = typeof navigator !== "undefined" ? navigator : null
+    setNativeShareAvailable(typeof navAny?.share === "function")
+  }, [])
+
+  const reportInvalid = async (link: DownloadLink) => {
+    setShareMsg("")
+    if (!link.gameId || !link.gameResourceId) {
+      setShareMsg("缺少资源信息，无法上报")
+      return
+    }
+    const reason = (typeof window !== "undefined" ? window.prompt("可选：填写备注（例如：提示失效/提取码错误）") : "") || ""
+    setReportingId(link.id)
+    try {
+      await createGameResourceFeedback({
+        game_id: link.gameId,
+        game_resource_id: link.gameResourceId,
+        download_url: link.url,
+        extract_code: link.password || "",
+        type: "link_invalid",
+        content: reason.trim(),
+      })
+      setShareMsg("已提交失效反馈")
+    } catch (e) {
+      setShareMsg(e instanceof Error ? e.message : "提交失败")
+    } finally {
+      setReportingId("")
+    }
   }
 
   const speedColors = {
@@ -231,6 +302,12 @@ export function DownloadCard({
                       </span>
                     )}
                   </div>
+                  {link.sourceLabel ? (
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      来源：<span className="text-foreground">{link.sourceLabel}</span>
+                      {link.author ? <span className="text-muted-foreground">（{link.author}）</span> : null}
+                    </div>
+                  ) : null}
                 </div>
               </div>
               
@@ -272,6 +349,16 @@ export function DownloadCard({
                     <ExternalLink className="ml-1 h-3 w-3 opacity-50" />
                   </a>
                 </Button>
+
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground hidden sm:flex"
+                  onClick={() => reportInvalid(link)}
+                  disabled={reportingId === link.id}
+                >
+                  {reportingId === link.id ? "提交中..." : "标记失效"}
+                </Button>
               </div>
             </div>
           </div>
@@ -307,11 +394,19 @@ export function DownloadCard({
             <Heart className={cn("mr-2 h-4 w-4", isWishlisted && "fill-current")} />
             {isWishlisted ? "已收藏" : "收藏游戏"}
           </Button>
-          <Button variant="outline" className="h-11 border-border">
-            <Share2 className="mr-2 h-4 w-4" />
-            分享资源
-          </Button>
+          {nativeShareAvailable ? (
+            <Button variant="outline" className="h-11 border-border" onClick={shareCurrentPage}>
+              <Share2 className="mr-2 h-4 w-4" />
+              分享
+            </Button>
+          ) : (
+            <Button variant="outline" className="h-11 border-border" onClick={copyShareLink}>
+              <Copy className="mr-2 h-4 w-4" />
+              复制链接
+            </Button>
+          )}
         </div>
+        {shareMsg ? <div className="mt-3 text-xs text-muted-foreground">{shareMsg}</div> : null}
       </div>
 
       {/* Tips */}

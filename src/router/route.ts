@@ -134,6 +134,32 @@ export const staticRoutes = [
         meta: { title: '用户提交审核', icon: 'HOutline:ClipboardDocumentCheckIcon', keepAlive: true },
       },
       {
+        path: '/game/reviews',
+        name: 'GameReviewsView',
+        component: () => import('@/views/game/reviews/index.vue'),
+        meta: { title: '游戏评论', icon: 'HOutline:ChatBubbleLeftRightIcon', keepAlive: false },
+      },
+      {
+        path: '/game/feedbacks',
+        name: 'GameFeedbacksView',
+        component: () => import('@/views/game/feedbacks/index.vue'),
+        meta: { title: '资源失效反馈', icon: 'HOutline:ExclamationTriangleIcon', keepAlive: false },
+      },
+      // 游戏管理 - 站点设置（复用系统配置页）
+      {
+        path: '/game/settings',
+        name: 'GameSiteSettingsView',
+        component: () => import('@/views/game/settings/index.vue'),
+        meta: { title: '站点设置', icon: 'HOutline:AdjustmentsHorizontalIcon', keepAlive: false },
+      },
+      // 游戏管理 - 导航栏设置（复用导航菜单管理页）
+      {
+        path: '/game/nav-menu',
+        name: 'GameNavMenuSettingsView',
+        component: () => import('@/views/game/nav-menu/index.vue'),
+        meta: { title: '导航栏设置', icon: 'HOutline:Bars3BottomLeftIcon', keepAlive: false },
+      },
+      {
         path: '/system/keyword-blocks',
         name: 'Keyword-blocksView',
         component: () => import('@/views/system/keyword-blocks/index.vue'),

@@ -55,9 +55,9 @@ export function CategorySection({
     <section>
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-2xl font-bold text-foreground">游戏分类</h2>
-        <button className="text-sm font-medium text-primary hover:underline">
+        <Link href="/category" className="text-sm font-medium text-primary hover:underline">
           查看全部
-        </button>
+        </Link>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-4">
@@ -67,7 +67,7 @@ export function CategorySection({
           return (
             <Link
               key={category.id}
-              href={`/?category=${encodeURIComponent(category.queryValue || category.id)}`}
+              href={`/category/${encodeURIComponent(category.queryValue || category.id)}`}
               className={cn(
                 "flex flex-col items-center gap-3 rounded-xl p-4 transition-all duration-300",
                 category.color,

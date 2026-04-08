@@ -17,6 +17,12 @@ import {
   type GameDTO,
   type GameResourceDTO,
 } from "@/lib/api/game"
+import type { Metadata } from "next"
+import { fetchPublicSystemConfig } from "@/lib/api/system"
+import { getSiteOrigin } from "@/lib/seo/site"
+import { JsonLd } from "@/components/seo/jsonld"
+
+export const revalidate = 300
 
 type SystemSpec = {
   os: string
@@ -96,14 +102,24 @@ function buildDownloadCardDownloads(resources: GameResourceDTO[]) {
     name: string
     type: keyof typeof nameByType
     url: string
+    password?: string
     size: string
     speed: "fast" | "medium" | "slow"
     isRecommended?: boolean
+    sourceLabel?: string
+    author?: string
+    gameId?: number
+    gameResourceId?: number
   }> = []
 
   for (const res of resources) {
     const size = res.size || ""
     const urls = Array.isArray(res.download_urls) ? res.download_urls : []
+    const isUserSubmission =
+      (res.resource_type || "").toLowerCase() === "submission" || (res.download_type || "").includes("用户投稿")
+    const sourceLabel = isUserSubmission ? "用户投稿" : undefined
+    const author = isUserSubmission ? (res.author || "").trim() || undefined : undefined
+    const password = (res.extract_code || "").trim() || undefined
     for (const url of urls) {
       const t = detectPanTypeByUrl(url)
       if (!t) continue
@@ -112,8 +128,13 @@ function buildDownloadCardDownloads(resources: GameResourceDTO[]) {
         name: nameByType[t],
         type: t,
         url,
+        password,
         size,
         speed: "medium",
+        sourceLabel,
+        author,
+        gameId: res.game_id,
+        gameResourceId: res.id,
       })
     }
   }
@@ -121,13 +142,23 @@ function buildDownloadCardDownloads(resources: GameResourceDTO[]) {
   if (items.length === 0) {
     for (const res of resources) {
       if (res.download_url?.trim()) {
+        const isUserSubmission =
+          (res.resource_type || "").toLowerCase() === "submission" || (res.download_type || "").includes("用户投稿")
+        const sourceLabel = isUserSubmission ? "用户投稿" : undefined
+        const author = isUserSubmission ? (res.author || "").trim() || undefined : undefined
+        const password = (res.extract_code || "").trim() || undefined
         items.push({
           id: String(res.id),
           name: res.title || "下载链接",
           type: "quark",
           url: res.download_url,
+          password,
           size: res.size || "",
           speed: "medium",
+          sourceLabel,
+          author,
+          gameId: res.game_id,
+          gameResourceId: res.id,
         })
       }
     }
@@ -135,10 +166,37 @@ function buildDownloadCardDownloads(resources: GameResourceDTO[]) {
 
   const uniqueByUrl = new Map<string, (typeof items)[number]>()
   for (const it of items) {
-    if (!uniqueByUrl.has(it.url)) uniqueByUrl.set(it.url, it)
+    const prev = uniqueByUrl.get(it.url)
+    if (!prev) {
+      uniqueByUrl.set(it.url, it)
+      continue
+    }
+    // Prefer keeping the one with password / recommended / user submission label
+    const score = (x: (typeof items)[number]) =>
+      (x.isRecommended ? 100 : 0) + (x.password ? 10 : 0) + (x.sourceLabel ? 2 : 0) + (x.author ? 1 : 0)
+    if (score(it) > score(prev)) uniqueByUrl.set(it.url, it)
   }
   const result = Array.from(uniqueByUrl.values())
-  if (result.length > 0) result[0].isRecommended = true
+  // Sort: recommended first, then by platform priority, then by password presence
+  const platformPriority: Record<string, number> = {
+    quark: 1,
+    aliyun: 2,
+    "123pan": 3,
+    tianyi: 4,
+    baidu: 5,
+    lanzou: 6,
+    onedrive: 7,
+    mega: 8,
+  }
+  result.sort((a, b) => {
+    if (!!a.isRecommended !== !!b.isRecommended) return a.isRecommended ? -1 : 1
+    const pa = platformPriority[a.type] ?? 99
+    const pb = platformPriority[b.type] ?? 99
+    if (pa !== pb) return pa - pb
+    if (!!a.password !== !!b.password) return a.password ? -1 : 1
+    return a.id.localeCompare(b.id)
+  })
+  if (result.length > 0 && !result.some((x) => x.isRecommended)) result[0].isRecommended = true
   return result
 }
 
@@ -149,6 +207,64 @@ async function fetchRelatedGames(current: GameDTO) {
     .filter((g) => g.id !== current.id)
     .slice(0, 4)
     .map(absolutizeGameMediaUrls)
+}
+
+export async function generateMetadata({
+  params,
+}: {
+  params: { id?: string | string[] } | Promise<{ id?: string | string[] }>
+}): Promise<Metadata> {
+  const resolvedParams = await Promise.resolve(params)
+  const rawId = Array.isArray(resolvedParams?.id) ? resolvedParams.id[0] : resolvedParams?.id
+  const id = String(rawId || "").trim()
+  const origin = await getSiteOrigin()
+
+  if (!/^\d+$/.test(id)) {
+    const cfg = await fetchPublicSystemConfig().catch(() => null)
+    const title = (cfg?.site_title || "游戏资源站").trim() || "游戏资源站"
+    return { title, alternates: { canonical: origin } }
+  }
+
+  const cfg = await fetchPublicSystemConfig().catch(() => null)
+  const siteTitle = (cfg?.site_title || "游戏资源站").trim() || "游戏资源站"
+
+  try {
+    const g0 = await fetchGameDetail(id)
+    const game = absolutizeGameMediaUrls(g0)
+
+    const title = `${game.title} - ${siteTitle}`
+    const description =
+      (game.short_description || "").trim() ||
+      stripHtml(game.description || "").slice(0, 160) ||
+      (cfg?.seo_description || "").trim() ||
+      siteTitle
+    const ogImage = game.header_image || game.cover || undefined
+    const url = `${origin}/${encodeURIComponent(String(game.id))}`
+
+    return {
+      title,
+      description,
+      alternates: { canonical: url },
+      openGraph: {
+        title,
+        description,
+        url,
+        type: "article",
+        images: ogImage ? [{ url: ogImage }] : undefined,
+      },
+      twitter: {
+        card: ogImage ? "summary_large_image" : "summary",
+        title,
+        description,
+        images: ogImage ? [ogImage] : undefined,
+      },
+    }
+  } catch {
+    return {
+      title: siteTitle,
+      alternates: { canonical: origin },
+    }
+  }
 }
 
 export default async function GameDetailPage({
@@ -218,8 +334,43 @@ export default async function GameDetailPage({
   const releaseDate = game.release_date ? formatDateZh(game.release_date) : ""
   const updateDate = bestRes?.updated_at ? formatDateZh(bestRes.updated_at) : formatDateZh(game.updated_at)
 
+  const origin = await getSiteOrigin()
+  const canonicalUrl = `${origin}/${encodeURIComponent(String(game.id))}`
+  const ldDescription = (game.short_description || stripHtml(game.description || "") || "").slice(0, 200)
+  const ldImage = (game.cover || game.header_image || "").trim()
+  const ldGenres = splitToList(game.genres || "").slice(0, 8)
+  const ldPlatforms = splitToList(game.platforms || "").slice(0, 8)
+  const ratingValue = Number.isFinite(game.rating) ? Number(game.rating) : 0
+  const ratingCount = Number.isFinite(game.recommendations_total) ? Number(game.recommendations_total) : 0
+
   return (
     <div className="min-h-screen bg-background">
+      <JsonLd
+        data={{
+          "@context": "https://schema.org",
+          "@type": "VideoGame",
+          name: game.title,
+          description: ldDescription || undefined,
+          url: canonicalUrl,
+          image: ldImage || undefined,
+          datePublished: game.release_date || undefined,
+          applicationCategory: "Game",
+          operatingSystem: ldPlatforms.length ? ldPlatforms.join(", ") : undefined,
+          genre: ldGenres.length ? ldGenres : undefined,
+          publisher: (game.publishers || "").trim() || undefined,
+          author: (game.developer || "").trim() || undefined,
+          aggregateRating:
+            ratingValue > 0 && ratingCount > 0
+              ? {
+                  "@type": "AggregateRating",
+                  ratingValue,
+                  ratingCount,
+                  bestRating: 10,
+                  worstRating: 0,
+                }
+              : undefined,
+        }}
+      />
       <Header />
 
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
@@ -258,12 +409,19 @@ export default async function GameDetailPage({
               languages={languages.length ? languages : ["简体中文"]}
             />
 
-            <DownloadCard
-              fileSize={bestRes?.size || game.size || "未知"}
-              updateDate={updateDate || "未知"}
-              version={bestRes?.version || "最新"}
-              downloads={downloads}
-            />
+            <div id="download">
+              <DownloadCard
+                fileSize={bestRes?.size || game.size || "未知"}
+                updateDate={updateDate || "未知"}
+                version={bestRes?.version || "最新"}
+                downloads={downloads}
+                share={{
+                  title: `${game.title} - 下载资源`,
+                  text: (game.short_description || "").trim() || "游戏下载资源分享",
+                  url: `${canonicalUrl}#download`,
+                }}
+              />
+            </div>
           </div>
         </div>
 
@@ -284,7 +442,7 @@ export default async function GameDetailPage({
         </section>
 
         <section className="mt-12 border-t border-border pt-8">
-          <UserReviews />
+          <UserReviews gameId={Number(game.id)} />
         </section>
 
         <section className="mt-12 border-t border-border pt-8">

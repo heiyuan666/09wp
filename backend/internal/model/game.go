@@ -70,9 +70,35 @@ type GameResource struct {
 	DownloadType string     `gorm:"size:80" json:"download_type"`
 	PanType      string     `gorm:"size:50;index" json:"pan_type"`
 	DownloadURL  string     `gorm:"size:1000;not null" json:"download_url"`
+	ExtractCode  string     `gorm:"size:50" json:"extract_code"`
 	Tested       bool       `gorm:"default:false" json:"tested"`
 	Author       string     `gorm:"size:100" json:"author"`
 	PublishDate  *time.Time `json:"publish_date,omitempty"`
 	CreatedAt    time.Time  `json:"created_at"`
 	UpdatedAt    time.Time  `json:"updated_at"`
+}
+
+// GameReview 游戏评论（前台用户发布）
+type GameReview struct {
+	ID      uint64 `gorm:"primaryKey" json:"id"`
+	GameID  uint64 `gorm:"index;not null" json:"game_id"`
+	UserID  uint64 `gorm:"index;not null" json:"user_id"`
+	Rating  int    `gorm:"default:0" json:"rating"` // 1~5，允许 0 表示仅文字
+	Content string `gorm:"type:text;not null" json:"content"`
+	Status  int8   `gorm:"default:1;index" json:"status"` // 1=展示 0=隐藏（预留审核/屏蔽）
+	HelpfulCount   uint64 `gorm:"default:0" json:"helpful_count"`
+	UnhelpfulCount uint64 `gorm:"default:0" json:"unhelpful_count"`
+
+	CreatedAt time.Time `gorm:"index" json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// GameReviewVote 评论投票（每用户每评论唯一，用于“最有帮助”排序）
+type GameReviewVote struct {
+	ID       uint64 `gorm:"primaryKey" json:"id"`
+	ReviewID uint64 `gorm:"index;not null;uniqueIndex:uniq_review_user" json:"review_id"`
+	UserID   uint64 `gorm:"index;not null;uniqueIndex:uniq_review_user" json:"user_id"`
+	Vote     int8   `gorm:"default:0" json:"vote"` // 1=helpful -1=unhelpful 0=neutral
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }

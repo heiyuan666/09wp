@@ -126,6 +126,7 @@ func UserSubmissionCreate(c *gin.Context) {
 					DownloadType: "用户投稿",
 					PanType:      mergePanType("", []string{sub.Link}),
 					DownloadURL:  sub.Link,
+					ExtractCode:  sub.ExtractCode,
 					Tested:       false,
 					Author:       formatSubmissionAuthor(userID),
 				}

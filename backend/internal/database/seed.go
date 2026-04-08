@@ -162,6 +162,20 @@ func SeedMenus() error {
 	if err := ensureMenu("/game/resources", "下载资源", "HOutline:ArrowDownTrayIcon", &gameDir.ID, 3); err != nil {
 		return err
 	}
+	if err := ensureMenu("/game/reviews", "游戏评论", "HOutline:ChatBubbleLeftRightIcon", &gameDir.ID, 4); err != nil {
+		return err
+	}
+	if err := ensureMenu("/game/feedbacks", "资源失效反馈", "HOutline:ExclamationTriangleIcon", &gameDir.ID, 5); err != nil {
+		return err
+	}
+
+	// 游戏站点专用设置入口（复用现有页面，但菜单挂载在“游戏管理”下）
+	if err := ensureMenu("/game/settings", "站点设置", "HOutline:AdjustmentsHorizontalIcon", &gameDir.ID, 90); err != nil {
+		return err
+	}
+	if err := ensureMenu("/game/nav-menu", "导航栏设置", "HOutline:Bars3BottomLeftIcon", &gameDir.ID, 91); err != nil {
+		return err
+	}
 
 	var sysDir model.Menu
 	if err := DB().Where("type = ? AND title = ?", "directory", "系统管理").First(&sysDir).Error; err != nil {
@@ -365,6 +379,26 @@ func SeedSystemConfig() error {
 		MeiliAPIKey:                "",
 		MeiliIndexName:             "resources",
 		UpdatedBy:                  0,
+	}
+	return DB().Create(&cfg).Error
+}
+
+// SeedGameSiteConfig 初始化游戏站点配置（单例）
+func SeedGameSiteConfig() error {
+	var cnt int64
+	if err := DB().Model(&model.GameSiteConfig{}).Count(&cnt).Error; err != nil {
+		return err
+	}
+	if cnt > 0 {
+		return nil
+	}
+	cfg := model.GameSiteConfig{
+		SiteTitle:      "游戏资源站",
+		LogoURL:        "",
+		FaviconURL:     "",
+		SeoKeywords:    "游戏,下载,资源",
+		SeoDescription: "游戏下载资源聚合站",
+		UpdatedBy:      0,
 	}
 	return DB().Create(&cfg).Error
 }
