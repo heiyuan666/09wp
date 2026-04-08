@@ -266,6 +266,7 @@ func SetupRouter(jwtSecret string) *gin.Engine {
 		gameAdmin.DELETE("/category/:id", handler.GameCategoryDelete)
 
 		// 游戏
+		gameAdmin.GET("/steam/search", handler.GameSteamSearch)
 		gameAdmin.GET("/steam/app/:appid", handler.GameSteamAppDetail)
 		gameAdmin.POST("/create", handler.GameCreate)
 		gameAdmin.PUT("/:id", handler.GameUpdate)

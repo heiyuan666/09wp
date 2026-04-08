@@ -44,6 +44,31 @@
     <el-dialog v-model="visible" :title="form.id ? '编辑游戏' : '新增游戏'" width="980px" destroy-on-close>
       <el-form :model="form" label-width="110px">
         <el-row :gutter="12">
+          <el-col :span="10">
+            <el-form-item label="Steam 搜索">
+              <el-input v-model="steamSearchKeyword" placeholder="输入游戏名，回车搜索" @keyup.enter="doSteamSearch" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="14">
+            <el-form-item label="选择结果">
+              <el-select
+                v-model="steamSelectedAppid"
+                filterable
+                clearable
+                placeholder="下拉选择后将自动填入 AppID 并拉取详情"
+                style="width: 100%"
+                :loading="steamSearchLoading"
+                @change="onSteamPick"
+              >
+                <el-option
+                  v-for="it in steamSearchOptions"
+                  :key="it.appid"
+                  :label="`${it.name} (appid: ${it.appid})`"
+                  :value="it.appid"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
           <el-col :span="8">
             <el-form-item label="Steam AppID">
               <el-input v-model="form.steam_appid" placeholder="例如 570" />
@@ -249,7 +274,7 @@
 import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { gameCategoryList, gameCreate, gameDelete, gameList, gameSteamAppDetail, gameUpdate } from '@/api/game'
+import { gameCategoryList, gameCreate, gameDelete, gameList, gameSteamAppDetail, gameSteamSearch, gameUpdate } from '@/api/game'
 
 const router = useRouter()
 const categories = ref<any[]>([])
@@ -257,6 +282,10 @@ const list = ref<any[]>([])
 const total = ref(0)
 const visible = ref(false)
 const steamLoading = ref(false)
+const steamSearchLoading = ref(false)
+const steamSearchKeyword = ref('')
+const steamSelectedAppid = ref<number | undefined>(undefined)
+const steamSearchOptions = ref<Array<{ appid: number; name: string; icon: string; match_score: number }>>([])
 
 const query = reactive({
   page: 1,
@@ -353,6 +382,9 @@ const resetForm = () => {
     dislikes: 0,
     gallery_text: '',
   })
+  steamSearchKeyword.value = ''
+  steamSelectedAppid.value = undefined
+  steamSearchOptions.value = []
 }
 
 const openCreate = () => {
@@ -463,6 +495,39 @@ const fetchFromSteam = async () => {
   } finally {
     steamLoading.value = false
   }
+}
+
+const doSteamSearch = async () => {
+  const kw = String(steamSearchKeyword.value || '').trim()
+  if (!kw) {
+    ElMessage.warning('请输入游戏名称')
+    return
+  }
+  steamSearchLoading.value = true
+  try {
+    const { data: res } = await gameSteamSearch(kw, {
+      cc: String(form.steam_cc || 'cn').trim() || 'cn',
+      l: String(form.steam_l || 'schinese').trim() || 'schinese',
+    })
+    if (res.code !== 200) {
+      ElMessage.error(res.message || 'Steam 搜索失败')
+      return
+    }
+    steamSearchOptions.value = Array.isArray(res.data?.data) ? res.data.data : []
+    if (steamSearchOptions.value.length === 0) {
+      const hint = String(res.data?.hint || '').trim()
+      ElMessage.warning(hint || '未搜索到结果，请尝试输入英文名或直接填写 Steam AppID')
+    }
+  } finally {
+    steamSearchLoading.value = false
+  }
+}
+
+const onSteamPick = async (appid?: number) => {
+  const id = Number(appid || 0)
+  if (!id) return
+  form.steam_appid = String(id)
+  await fetchFromSteam()
 }
 
 const save = async () => {
