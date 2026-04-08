@@ -171,6 +171,29 @@
         </el-row>
 
         <el-row :gutter="12">
+          <el-col :span="6">
+            <el-form-item label="年龄限制">
+              <el-input-number v-model="form.required_age" :min="0" style="width: 100%" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="6">
+            <el-form-item label="是否免费">
+              <el-switch v-model="form.is_free" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="6">
+            <el-form-item label="推荐总数">
+              <el-input-number v-model="form.recommendations_total" :min="0" style="width: 100%" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="6">
+            <el-form-item label="平台">
+              <el-input v-model="form.platforms" placeholder="windows/mac/linux" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <el-row :gutter="12">
           <el-col :span="8">
             <el-form-item label="原价(分)">
               <el-input-number v-model="form.price_initial" :min="0" style="width: 100%" />
@@ -184,6 +207,19 @@
           <el-col :span="8">
             <el-form-item label="开发商">
               <el-input v-model="form.developer" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <el-row :gutter="12">
+          <el-col :span="12">
+            <el-form-item label="开发商列表">
+              <el-input v-model="form.developers" placeholder="如：Valve/CDPR" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="支持语言">
+              <el-input v-model="form.supported_languages" placeholder="如：简体中文,英语,日语" />
             </el-form-item>
           </el-col>
         </el-row>
@@ -258,6 +294,18 @@
         <el-form-item label="截图(每行1个URL)">
           <el-input v-model="form.gallery_text" type="textarea" :rows="4" />
         </el-form-item>
+        <el-form-item label="评测文案">
+          <el-input v-model="form.reviews" type="textarea" :rows="3" />
+        </el-form-item>
+        <el-form-item label="PC 最低配置(HTML)">
+          <el-input v-model="form.pc_requirements" type="textarea" :rows="3" />
+        </el-form-item>
+        <el-form-item label="Mac 最低配置(HTML)">
+          <el-input v-model="form.mac_requirements" type="textarea" :rows="3" />
+        </el-form-item>
+        <el-form-item label="Linux 最低配置(HTML)">
+          <el-input v-model="form.linux_requirements" type="textarea" :rows="3" />
+        </el-form-item>
         <el-form-item label="游戏介绍">
           <el-input v-model="form.description" type="textarea" :rows="4" />
         </el-form-item>
@@ -298,6 +346,8 @@ const form = reactive({
   id: 0,
   category_id: undefined as number | undefined,
   steam_appid: '',
+  required_age: 0,
+  is_free: false,
   steam_cc: 'cn',
   steam_l: 'schinese',
   title: '',
@@ -305,9 +355,16 @@ const form = reactive({
   banner: '',
   video_url: '',
   short_description: '',
+  supported_languages: '',
+  reviews: '',
+  pc_requirements: '',
+  mac_requirements: '',
+  linux_requirements: '',
   header_image: '',
   website: '',
+  developers: '',
   publishers: '',
+  platforms: '',
   genres: '',
   tags: '',
   price_text: '',
@@ -323,6 +380,7 @@ const form = reactive({
   developer: '',
   rating: 0,
   steam_score: 0,
+  recommendations_total: 0,
   downloads: 0,
   likes: 0,
   dislikes: 0,
@@ -352,6 +410,8 @@ const resetForm = () => {
     id: 0,
     category_id: undefined,
     steam_appid: '',
+    required_age: 0,
+    is_free: false,
     steam_cc: 'cn',
     steam_l: 'schinese',
     title: '',
@@ -359,9 +419,16 @@ const resetForm = () => {
     banner: '',
     video_url: '',
     short_description: '',
+    supported_languages: '',
+    reviews: '',
+    pc_requirements: '',
+    mac_requirements: '',
+    linux_requirements: '',
     header_image: '',
     website: '',
+    developers: '',
     publishers: '',
+    platforms: '',
     genres: '',
     tags: '',
     price_text: '',
@@ -377,6 +444,7 @@ const resetForm = () => {
     developer: '',
     rating: 0,
     steam_score: 0,
+    recommendations_total: 0,
     downloads: 0,
     likes: 0,
     dislikes: 0,
@@ -466,6 +534,12 @@ const fetchFromSteam = async () => {
     const categoriesFromSteam = Array.isArray(d.categories) ? d.categories : []
     const publishers = Array.isArray(d.publishers) ? d.publishers : []
     const developers = Array.isArray(d.developers) ? d.developers : []
+    const platformsObj = (d as any).platforms || {}
+    const platformList = [
+      platformsObj.windows ? 'windows' : '',
+      platformsObj.mac ? 'mac' : '',
+      platformsObj.linux ? 'linux' : '',
+    ].filter(Boolean)
     const releaseDate = normalizeSteamReleaseDate(String(d.release_date || ''))
 
     form.title = d.name || form.title
@@ -474,15 +548,25 @@ const fetchFromSteam = async () => {
     form.banner = d.background_raw || d.capsule_image || form.banner
     form.video_url = d.video_url || form.video_url
     form.short_description = d.short_description || form.short_description
+    form.supported_languages = String((d as any).supported_languages || '')
+    form.reviews = String((d as any).reviews || '')
+    form.pc_requirements = String((d as any).pc_requirements || '')
+    form.mac_requirements = String((d as any).mac_requirements || '')
+    form.linux_requirements = String((d as any).linux_requirements || '')
     form.description = d.detailed_description || d.about_the_game || form.description
     form.website = d.website || form.website
+    form.developers = developers.join('/') || form.developers
     form.publishers = publishers.join('/') || form.publishers
+    form.platforms = platformList.join('/') || form.platforms
     form.genres = genres.join('/') || form.genres
     form.tags = tags.join('/') || categoriesFromSteam.join('/') || form.tags
     form.type = genres.join('/') || categoriesFromSteam.join('/') || form.type
     form.developer = developers.join('/') || form.developer
+    form.required_age = Number((d as any).required_age || 0)
+    form.is_free = Boolean((d as any).is_free)
     form.metacritic_score = Number(d.metacritic_score || 0)
     form.steam_score = Number(d.metacritic_score || form.steam_score || 0)
+    form.recommendations_total = Number((d as any).recommendations_total || 0)
     form.price_text = String(d.price_text || '')
     form.price_currency = String(d.price_currency || '')
     form.price_initial = Number(d.price_initial || 0)
@@ -534,14 +618,23 @@ const save = async () => {
   const payload = {
     category_id: form.category_id || undefined,
     steam_appid: Number(form.steam_appid || 0),
+    required_age: Number(form.required_age || 0),
+    is_free: Boolean(form.is_free),
     title: form.title,
     cover: form.cover,
     banner: form.banner,
     video_url: form.video_url,
     short_description: form.short_description,
+    supported_languages: form.supported_languages,
+    reviews: form.reviews,
+    pc_requirements: form.pc_requirements,
+    mac_requirements: form.mac_requirements,
+    linux_requirements: form.linux_requirements,
     header_image: form.header_image,
     website: form.website,
+    developers: form.developers,
     publishers: form.publishers,
+    platforms: form.platforms,
     genres: form.genres,
     tags: form.tags,
     price_text: form.price_text,
@@ -557,6 +650,7 @@ const save = async () => {
     developer: form.developer,
     rating: Number(form.rating || 0),
     steam_score: Number(form.steam_score || 0),
+    recommendations_total: Number(form.recommendations_total || 0),
     downloads: Number(form.downloads || 0),
     likes: Number(form.likes || 0),
     dislikes: Number(form.dislikes || 0),

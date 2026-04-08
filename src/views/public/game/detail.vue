@@ -55,18 +55,36 @@
               <span class="video-play-text">点击播放视频</span>
             </div>
           </button>
-          <video v-else class="video-player" :src="videoUrl" controls autoplay preload="metadata" playsinline>
-            您的浏览器暂不支持视频播放。
-          </video>
+          <div v-else class="video-player">
+            <ReactPlayerWrapper :url="videoUrl" :playing="true" :controls="true" />
+          </div>
         </div>
       </el-card>
 
       <el-card v-if="galleryUrls.length" class="section" shadow="hover">
         <template #header>截图 / 画廊</template>
         <div class="gallery">
-          <img v-for="(u, i) in galleryUrls" :key="i" :src="u" class="g-img" alt="" loading="lazy" />
+          <el-carousel height="220px" :interval="0" arrow="always" indicator-position="outside">
+            <el-carousel-item v-for="(u, i) in galleryUrls" :key="`${i}-${u}`">
+              <div class="gallery-slide" @click="openGalleryViewer(u)">
+                <img :src="u" class="g-img" alt="" loading="lazy" />
+              </div>
+            </el-carousel-item>
+          </el-carousel>
         </div>
       </el-card>
+
+      <el-dialog
+        v-model="galleryViewerVisible"
+        title="查看截图"
+        width="860px"
+        :show-close="true"
+        destroy-on-close
+      >
+        <div class="gallery-viewer">
+          <img v-if="galleryViewerUrl" :src="galleryViewerUrl" class="viewer-img" alt="" />
+        </div>
+      </el-dialog>
 
       <el-card v-if="descriptionHtml" class="section" shadow="hover">
         <template #header>游戏介绍</template>
@@ -202,6 +220,7 @@ import { ElMessage } from 'element-plus'
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { siteMySubmissions, siteSubmissionCreate } from '@/api/netdisk'
+import ReactPlayerWrapper from '@/components/ReactPlayerWrapper.vue'
 import {
   publicGameDetail,
   publicGameResourceList,
@@ -272,6 +291,13 @@ const galleryUrls = computed(() => {
   if (!Array.isArray(raw)) return []
   return raw.map((x) => String(x).trim()).filter(Boolean)
 })
+
+const galleryViewerVisible = ref(false)
+const galleryViewerUrl = ref('')
+const openGalleryViewer = (u: string) => {
+  galleryViewerUrl.value = u
+  galleryViewerVisible.value = true
+}
 
 const descriptionHtml = computed(() => {
   const d = game.value?.description
@@ -584,22 +610,50 @@ watch(
   aspect-ratio: 16 / 9;
   display: block;
   background: #000;
+  position: relative;
+  overflow: hidden;
+}
+
+.video-player :deep(.rp-wrap) {
+  position: absolute;
+  inset: 0;
 }
 .section {
   border-radius: 14px;
   margin-bottom: 16px;
 }
 .gallery {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: 10px;
+  width: 100%;
 }
+
+.gallery-slide {
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #f1f5f9;
+}
+
 .g-img {
   width: 100%;
-  height: 100px;
+  height: 100%;
   object-fit: cover;
-  border-radius: 8px;
-  background: #f1f5f9;
+  display: block;
+}
+
+.gallery-viewer {
+  width: 100%;
+  padding: 10px 0;
+  display: grid;
+  place-items: center;
+}
+
+.viewer-img {
+  max-width: 100%;
+  max-height: 70vh;
+  object-fit: contain;
+  border-radius: 10px;
 }
 .desc {
   font-size: 14px;

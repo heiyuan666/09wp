@@ -76,6 +76,9 @@ func main() {
 	if err := database.SeedNetdiskCredential(); err != nil {
 		log.Printf("seed netdisk credential failed: %v", err)
 	}
+	if err := database.SeedGameCategories(); err != nil {
+		log.Printf("seed game categories failed: %v", err)
+	}
 
 	// 初始化 Gin 路由
 	r := router.SetupRouter(cfg.JWTSecret)

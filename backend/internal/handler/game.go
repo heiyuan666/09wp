@@ -168,39 +168,49 @@ func normalizeGameResourceType(value string) string {
 }
 
 type gameDTO struct {
-	ID               uint64      `json:"id"`
-	CategoryID       *uint64     `json:"category_id,omitempty"`
-	SteamAppID       uint64      `json:"steam_appid"`
-	Title            string      `json:"title"`
-	Cover            string      `json:"cover"`
-	Banner           string      `json:"banner"`
-	VideoURL         string      `json:"video_url"`
-	ShortDescription string      `json:"short_description"`
-	HeaderImage      string      `json:"header_image"`
-	Website          string      `json:"website"`
-	Publishers       string      `json:"publishers"`
-	Genres           string      `json:"genres"`
-	Tags             string      `json:"tags"`
-	PriceText        string      `json:"price_text"`
-	PriceCurrency    string      `json:"price_currency"`
-	PriceInitial     int         `json:"price_initial"`
-	PriceFinal       int         `json:"price_final"`
-	PriceDiscount    int         `json:"price_discount"`
-	MetacriticScore  int         `json:"metacritic_score"`
-	Description      string      `json:"description"`
-	ReleaseDate      *time.Time  `json:"release_date,omitempty"`
-	Size             string      `json:"size"`
-	Type             string      `json:"type"`
-	Developer        string      `json:"developer"`
-	Rating           float64     `json:"rating"`
-	SteamScore       int         `json:"steam_score"`
-	Downloads        uint64      `json:"downloads"`
-	Likes            uint64      `json:"likes"`
-	Dislikes         uint64      `json:"dislikes"`
-	Gallery          []string    `json:"gallery"`
-	CreatedAt        time.Time   `json:"created_at"`
-	UpdatedAt        time.Time   `json:"updated_at"`
-	Resources        interface{} `json:"resources,omitempty"`
+	ID                uint64      `json:"id"`
+	CategoryID        *uint64     `json:"category_id,omitempty"`
+	SteamAppID        uint64      `json:"steam_appid"`
+	RequiredAge       int         `json:"required_age"`
+	IsFree            bool        `json:"is_free"`
+	Title             string      `json:"title"`
+	Cover             string      `json:"cover"`
+	Banner            string      `json:"banner"`
+	VideoURL          string      `json:"video_url"`
+	ShortDescription  string      `json:"short_description"`
+	SupportedLangs    string      `json:"supported_languages"`
+	Reviews           string      `json:"reviews"`
+	PCRequirements    string      `json:"pc_requirements"`
+	MacRequirements   string      `json:"mac_requirements"`
+	LinuxRequirements string      `json:"linux_requirements"`
+	HeaderImage       string      `json:"header_image"`
+	Website           string      `json:"website"`
+	Developers        string      `json:"developers"`
+	Publishers        string      `json:"publishers"`
+	Platforms         string      `json:"platforms"`
+	Genres            string      `json:"genres"`
+	Tags              string      `json:"tags"`
+	PriceText         string      `json:"price_text"`
+	PriceCurrency     string      `json:"price_currency"`
+	PriceInitial      int         `json:"price_initial"`
+	PriceFinal        int         `json:"price_final"`
+	PriceDiscount     int         `json:"price_discount"`
+	MetacriticScore   int         `json:"metacritic_score"`
+	Description       string      `json:"description"`
+	ReleaseDate       *time.Time  `json:"release_date,omitempty"`
+	Size              string      `json:"size"`
+	Type              string      `json:"type"`
+	Developer         string      `json:"developer"`
+	Rating            float64     `json:"rating"`
+	SteamScore        int         `json:"steam_score"`
+	Recommendations   uint64      `json:"recommendations_total"`
+	Downloads         uint64      `json:"downloads"`
+	Likes             uint64      `json:"likes"`
+	Dislikes          uint64      `json:"dislikes"`
+	Gallery           []string    `json:"gallery"`
+	CreatedAt         time.Time   `json:"created_at"`
+	UpdatedAt         time.Time   `json:"updated_at"`
+	Resources         interface{} `json:"resources,omitempty"`
 }
 
 type gameResourceDTO struct {
@@ -223,38 +233,48 @@ type gameResourceDTO struct {
 
 func toGameDTO(g model.Game) gameDTO {
 	return gameDTO{
-		ID:               g.ID,
-		CategoryID:       g.CategoryID,
-		SteamAppID:       g.SteamAppID,
-		Title:            g.Title,
-		Cover:            g.Cover,
-		Banner:           g.Banner,
-		VideoURL:         g.VideoURL,
-		ShortDescription: g.ShortDescription,
-		HeaderImage:      g.HeaderImage,
-		Website:          g.Website,
-		Publishers:       g.Publishers,
-		Genres:           g.Genres,
-		Tags:             g.Tags,
-		PriceText:        g.PriceText,
-		PriceCurrency:    g.PriceCurrency,
-		PriceInitial:     g.PriceInitial,
-		PriceFinal:       g.PriceFinal,
-		PriceDiscount:    g.PriceDiscount,
-		MetacriticScore:  g.MetacriticScore,
-		Description:      g.Description,
-		ReleaseDate:      g.ReleaseDate,
-		Size:             g.Size,
-		Type:             g.Type,
-		Developer:        g.Developer,
-		Rating:           g.Rating,
-		SteamScore:       g.SteamScore,
-		Downloads:        g.Downloads,
-		Likes:            g.Likes,
-		Dislikes:         g.Dislikes,
-		Gallery:          decodeGalleryString(g.Gallery),
-		CreatedAt:        g.CreatedAt,
-		UpdatedAt:        g.UpdatedAt,
+		ID:                g.ID,
+		CategoryID:        g.CategoryID,
+		SteamAppID:        g.SteamAppID,
+		RequiredAge:       g.RequiredAge,
+		IsFree:            g.IsFree,
+		Title:             g.Title,
+		Cover:             g.Cover,
+		Banner:            g.Banner,
+		VideoURL:          g.VideoURL,
+		ShortDescription:  g.ShortDescription,
+		SupportedLangs:    g.SupportedLangs,
+		Reviews:           g.Reviews,
+		PCRequirements:    g.PCRequirements,
+		MacRequirements:   g.MacRequirements,
+		LinuxRequirements: g.LinuxRequirements,
+		HeaderImage:       g.HeaderImage,
+		Website:           g.Website,
+		Developers:        g.Developers,
+		Publishers:        g.Publishers,
+		Platforms:         g.Platforms,
+		Genres:            g.Genres,
+		Tags:              g.Tags,
+		PriceText:         g.PriceText,
+		PriceCurrency:     g.PriceCurrency,
+		PriceInitial:      g.PriceInitial,
+		PriceFinal:        g.PriceFinal,
+		PriceDiscount:     g.PriceDiscount,
+		MetacriticScore:   g.MetacriticScore,
+		Description:       g.Description,
+		ReleaseDate:       g.ReleaseDate,
+		Size:              g.Size,
+		Type:              g.Type,
+		Developer:         g.Developer,
+		Rating:            g.Rating,
+		SteamScore:        g.SteamScore,
+		Recommendations:   g.Recommendations,
+		Downloads:         g.Downloads,
+		Likes:             g.Likes,
+		Dislikes:          g.Dislikes,
+		Gallery:           decodeGalleryString(g.Gallery),
+		CreatedAt:         g.CreatedAt,
+		UpdatedAt:         g.UpdatedAt,
 	}
 }
 
@@ -286,12 +306,15 @@ type steamAppDetailsResp struct {
 	Success bool `json:"success"`
 	Data    struct {
 		SteamAppID          uint64   `json:"steam_appid"`
+		RequiredAge         int      `json:"required_age"`
 		Name                string   `json:"name"`
 		Type                string   `json:"type"`
 		IsFree              bool     `json:"is_free"`
 		ShortDescription    string   `json:"short_description"`
 		DetailedDescription string   `json:"detailed_description"`
 		AboutTheGame        string   `json:"about_the_game"`
+		SupportedLanguages  string   `json:"supported_languages"`
+		Reviews             string   `json:"reviews"`
 		HeaderImage         string   `json:"header_image"`
 		CapsuleImage        string   `json:"capsule_image"`
 		Background          string   `json:"background"`
@@ -307,6 +330,23 @@ type steamAppDetailsResp struct {
 			ID          string `json:"id"`
 			Description string `json:"description"`
 		} `json:"genres"`
+		PCRequirements struct {
+			Minimum string `json:"minimum"`
+		} `json:"pc_requirements"`
+		MacRequirements struct {
+			Minimum string `json:"minimum"`
+		} `json:"mac_requirements"`
+		LinuxRequirements struct {
+			Minimum string `json:"minimum"`
+		} `json:"linux_requirements"`
+		Platforms struct {
+			Windows bool `json:"windows"`
+			Mac     bool `json:"mac"`
+			Linux   bool `json:"linux"`
+		} `json:"platforms"`
+		Recommendations struct {
+			Total uint64 `json:"total"`
+		} `json:"recommendations"`
 		PriceOverview struct {
 			Currency         string `json:"currency"`
 			Initial          int    `json:"initial"`
@@ -560,12 +600,15 @@ func GameSteamAppDetail(c *gin.Context) {
 
 	gameOK(c, gin.H{
 		"appid":                raw.Data.SteamAppID,
+		"required_age":         raw.Data.RequiredAge,
 		"name":                 raw.Data.Name,
 		"type":                 raw.Data.Type,
 		"is_free":              raw.Data.IsFree,
 		"short_description":    raw.Data.ShortDescription,
 		"detailed_description": raw.Data.DetailedDescription,
 		"about_the_game":       raw.Data.AboutTheGame,
+		"supported_languages":  raw.Data.SupportedLanguages,
+		"reviews":              raw.Data.Reviews,
 		"header_image":         raw.Data.HeaderImage,
 		"capsule_image":        raw.Data.CapsuleImage,
 		"background":           raw.Data.Background,
@@ -576,19 +619,28 @@ func GameSteamAppDetail(c *gin.Context) {
 		"categories":           categories,
 		"genres":               genres,
 		"tags":                 tags,
-		"screenshots":          screenshots,
-		"video_url":            videoURL,
-		"price_text":           priceText,
-		"price_currency":       raw.Data.PriceOverview.Currency,
-		"price_initial":        raw.Data.PriceOverview.Initial,
-		"price_final":          raw.Data.PriceOverview.Final,
-		"price_discount":       raw.Data.PriceOverview.DiscountPercent,
-		"metacritic_score":     raw.Data.Metacritic.Score,
-		"metacritic_url":       raw.Data.Metacritic.URL,
-		"release_date":         raw.Data.ReleaseDate.Date,
-		"coming_soon":          raw.Data.ReleaseDate.ComingSoon,
-		"cc":                   cc,
-		"l":                    lang,
+		"pc_requirements":      strings.TrimSpace(raw.Data.PCRequirements.Minimum),
+		"mac_requirements":     strings.TrimSpace(raw.Data.MacRequirements.Minimum),
+		"linux_requirements":   strings.TrimSpace(raw.Data.LinuxRequirements.Minimum),
+		"platforms": gin.H{
+			"windows": raw.Data.Platforms.Windows,
+			"mac":     raw.Data.Platforms.Mac,
+			"linux":   raw.Data.Platforms.Linux,
+		},
+		"screenshots":           screenshots,
+		"video_url":             videoURL,
+		"price_text":            priceText,
+		"price_currency":        raw.Data.PriceOverview.Currency,
+		"price_initial":         raw.Data.PriceOverview.Initial,
+		"price_final":           raw.Data.PriceOverview.Final,
+		"price_discount":        raw.Data.PriceOverview.DiscountPercent,
+		"metacritic_score":      raw.Data.Metacritic.Score,
+		"metacritic_url":        raw.Data.Metacritic.URL,
+		"recommendations_total": raw.Data.Recommendations.Total,
+		"release_date":          raw.Data.ReleaseDate.Date,
+		"coming_soon":           raw.Data.ReleaseDate.ComingSoon,
+		"cc":                    cc,
+		"l":                     lang,
 	})
 }
 
@@ -687,35 +739,45 @@ func GameCategoryList(c *gin.Context) {
 
 func GameCreate(c *gin.Context) {
 	var req struct {
-		CategoryID       *uint64  `json:"category_id"`
-		SteamAppID       uint64   `json:"steam_appid"`
-		Title            string   `json:"title" binding:"required"`
-		Cover            string   `json:"cover"`
-		Banner           string   `json:"banner"`
-		VideoURL         string   `json:"video_url"`
-		ShortDescription string   `json:"short_description"`
-		HeaderImage      string   `json:"header_image"`
-		Website          string   `json:"website"`
-		Publishers       string   `json:"publishers"`
-		Genres           string   `json:"genres"`
-		Tags             string   `json:"tags"`
-		PriceText        string   `json:"price_text"`
-		PriceCurrency    string   `json:"price_currency"`
-		PriceInitial     int      `json:"price_initial"`
-		PriceFinal       int      `json:"price_final"`
-		PriceDiscount    int      `json:"price_discount"`
-		MetacriticScore  int      `json:"metacritic_score"`
-		Description      string   `json:"description"`
-		ReleaseDate      string   `json:"release_date"`
-		Size             string   `json:"size"`
-		Type             string   `json:"type"`
-		Developer        string   `json:"developer"`
-		Rating           float64  `json:"rating"`
-		SteamScore       int      `json:"steam_score"`
-		Downloads        uint64   `json:"downloads"`
-		Likes            uint64   `json:"likes"`
-		Dislikes         uint64   `json:"dislikes"`
-		Gallery          []string `json:"gallery"`
+		CategoryID        *uint64  `json:"category_id"`
+		SteamAppID        uint64   `json:"steam_appid"`
+		RequiredAge       int      `json:"required_age"`
+		IsFree            bool     `json:"is_free"`
+		Title             string   `json:"title" binding:"required"`
+		Cover             string   `json:"cover"`
+		Banner            string   `json:"banner"`
+		VideoURL          string   `json:"video_url"`
+		ShortDescription  string   `json:"short_description"`
+		SupportedLangs    string   `json:"supported_languages"`
+		Reviews           string   `json:"reviews"`
+		PCRequirements    string   `json:"pc_requirements"`
+		MacRequirements   string   `json:"mac_requirements"`
+		LinuxRequirements string   `json:"linux_requirements"`
+		HeaderImage       string   `json:"header_image"`
+		Website           string   `json:"website"`
+		Developers        string   `json:"developers"`
+		Publishers        string   `json:"publishers"`
+		Platforms         string   `json:"platforms"`
+		Genres            string   `json:"genres"`
+		Tags              string   `json:"tags"`
+		PriceText         string   `json:"price_text"`
+		PriceCurrency     string   `json:"price_currency"`
+		PriceInitial      int      `json:"price_initial"`
+		PriceFinal        int      `json:"price_final"`
+		PriceDiscount     int      `json:"price_discount"`
+		MetacriticScore   int      `json:"metacritic_score"`
+		Description       string   `json:"description"`
+		ReleaseDate       string   `json:"release_date"`
+		Size              string   `json:"size"`
+		Type              string   `json:"type"`
+		Developer         string   `json:"developer"`
+		Rating            float64  `json:"rating"`
+		SteamScore        int      `json:"steam_score"`
+		Recommendations   uint64   `json:"recommendations_total"`
+		Downloads         uint64   `json:"downloads"`
+		Likes             uint64   `json:"likes"`
+		Dislikes          uint64   `json:"dislikes"`
+		Gallery           []string `json:"gallery"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		gameErr(c, "invalid params")
@@ -729,35 +791,45 @@ func GameCreate(c *gin.Context) {
 	}
 
 	item := model.Game{
-		CategoryID:       req.CategoryID,
-		SteamAppID:       req.SteamAppID,
-		Title:            strings.TrimSpace(req.Title),
-		Cover:            strings.TrimSpace(req.Cover),
-		Banner:           strings.TrimSpace(req.Banner),
-		VideoURL:         strings.TrimSpace(req.VideoURL),
-		ShortDescription: strings.TrimSpace(req.ShortDescription),
-		HeaderImage:      strings.TrimSpace(req.HeaderImage),
-		Website:          strings.TrimSpace(req.Website),
-		Publishers:       strings.TrimSpace(req.Publishers),
-		Genres:           strings.TrimSpace(req.Genres),
-		Tags:             strings.TrimSpace(req.Tags),
-		PriceText:        strings.TrimSpace(req.PriceText),
-		PriceCurrency:    strings.TrimSpace(req.PriceCurrency),
-		PriceInitial:     req.PriceInitial,
-		PriceFinal:       req.PriceFinal,
-		PriceDiscount:    req.PriceDiscount,
-		MetacriticScore:  req.MetacriticScore,
-		Description:      req.Description,
-		ReleaseDate:      releaseDate,
-		Size:             strings.TrimSpace(req.Size),
-		Type:             strings.TrimSpace(req.Type),
-		Developer:        strings.TrimSpace(req.Developer),
-		Rating:           req.Rating,
-		SteamScore:       req.SteamScore,
-		Downloads:        req.Downloads,
-		Likes:            req.Likes,
-		Dislikes:         req.Dislikes,
-		Gallery:          parseGalleryString(req.Gallery),
+		CategoryID:        req.CategoryID,
+		SteamAppID:        req.SteamAppID,
+		RequiredAge:       req.RequiredAge,
+		IsFree:            req.IsFree,
+		Title:             strings.TrimSpace(req.Title),
+		Cover:             strings.TrimSpace(req.Cover),
+		Banner:            strings.TrimSpace(req.Banner),
+		VideoURL:          strings.TrimSpace(req.VideoURL),
+		ShortDescription:  strings.TrimSpace(req.ShortDescription),
+		SupportedLangs:    strings.TrimSpace(req.SupportedLangs),
+		Reviews:           req.Reviews,
+		PCRequirements:    req.PCRequirements,
+		MacRequirements:   req.MacRequirements,
+		LinuxRequirements: req.LinuxRequirements,
+		HeaderImage:       strings.TrimSpace(req.HeaderImage),
+		Website:           strings.TrimSpace(req.Website),
+		Developers:        strings.TrimSpace(req.Developers),
+		Publishers:        strings.TrimSpace(req.Publishers),
+		Platforms:         strings.TrimSpace(req.Platforms),
+		Genres:            strings.TrimSpace(req.Genres),
+		Tags:              strings.TrimSpace(req.Tags),
+		PriceText:         strings.TrimSpace(req.PriceText),
+		PriceCurrency:     strings.TrimSpace(req.PriceCurrency),
+		PriceInitial:      req.PriceInitial,
+		PriceFinal:        req.PriceFinal,
+		PriceDiscount:     req.PriceDiscount,
+		MetacriticScore:   req.MetacriticScore,
+		Description:       req.Description,
+		ReleaseDate:       releaseDate,
+		Size:              strings.TrimSpace(req.Size),
+		Type:              strings.TrimSpace(req.Type),
+		Developer:         strings.TrimSpace(req.Developer),
+		Rating:            req.Rating,
+		SteamScore:        req.SteamScore,
+		Recommendations:   req.Recommendations,
+		Downloads:         req.Downloads,
+		Likes:             req.Likes,
+		Dislikes:          req.Dislikes,
+		Gallery:           parseGalleryString(req.Gallery),
 	}
 	if item.Title == "" {
 		gameErr(c, "title is required")
@@ -779,35 +851,45 @@ func GameUpdate(c *gin.Context) {
 	}
 
 	var req struct {
-		CategoryID       *uint64  `json:"category_id"`
-		SteamAppID       *uint64  `json:"steam_appid"`
-		Title            string   `json:"title"`
-		Cover            string   `json:"cover"`
-		Banner           string   `json:"banner"`
-		VideoURL         string   `json:"video_url"`
-		ShortDescription string   `json:"short_description"`
-		HeaderImage      string   `json:"header_image"`
-		Website          string   `json:"website"`
-		Publishers       string   `json:"publishers"`
-		Genres           string   `json:"genres"`
-		Tags             string   `json:"tags"`
-		PriceText        string   `json:"price_text"`
-		PriceCurrency    string   `json:"price_currency"`
-		PriceInitial     *int     `json:"price_initial"`
-		PriceFinal       *int     `json:"price_final"`
-		PriceDiscount    *int     `json:"price_discount"`
-		MetacriticScore  *int     `json:"metacritic_score"`
-		Description      string   `json:"description"`
-		ReleaseDate      string   `json:"release_date"`
-		Size             string   `json:"size"`
-		Type             string   `json:"type"`
-		Developer        string   `json:"developer"`
-		Rating           *float64 `json:"rating"`
-		SteamScore       *int     `json:"steam_score"`
-		Downloads        *uint64  `json:"downloads"`
-		Likes            *uint64  `json:"likes"`
-		Dislikes         *uint64  `json:"dislikes"`
-		Gallery          []string `json:"gallery"`
+		CategoryID        *uint64  `json:"category_id"`
+		SteamAppID        *uint64  `json:"steam_appid"`
+		RequiredAge       *int     `json:"required_age"`
+		IsFree            *bool    `json:"is_free"`
+		Title             string   `json:"title"`
+		Cover             string   `json:"cover"`
+		Banner            string   `json:"banner"`
+		VideoURL          string   `json:"video_url"`
+		ShortDescription  string   `json:"short_description"`
+		SupportedLangs    string   `json:"supported_languages"`
+		Reviews           string   `json:"reviews"`
+		PCRequirements    string   `json:"pc_requirements"`
+		MacRequirements   string   `json:"mac_requirements"`
+		LinuxRequirements string   `json:"linux_requirements"`
+		HeaderImage       string   `json:"header_image"`
+		Website           string   `json:"website"`
+		Developers        string   `json:"developers"`
+		Publishers        string   `json:"publishers"`
+		Platforms         string   `json:"platforms"`
+		Genres            string   `json:"genres"`
+		Tags              string   `json:"tags"`
+		PriceText         string   `json:"price_text"`
+		PriceCurrency     string   `json:"price_currency"`
+		PriceInitial      *int     `json:"price_initial"`
+		PriceFinal        *int     `json:"price_final"`
+		PriceDiscount     *int     `json:"price_discount"`
+		MetacriticScore   *int     `json:"metacritic_score"`
+		Description       string   `json:"description"`
+		ReleaseDate       string   `json:"release_date"`
+		Size              string   `json:"size"`
+		Type              string   `json:"type"`
+		Developer         string   `json:"developer"`
+		Rating            *float64 `json:"rating"`
+		SteamScore        *int     `json:"steam_score"`
+		Recommendations   *uint64  `json:"recommendations_total"`
+		Downloads         *uint64  `json:"downloads"`
+		Likes             *uint64  `json:"likes"`
+		Dislikes          *uint64  `json:"dislikes"`
+		Gallery           []string `json:"gallery"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		gameErr(c, "invalid params")
@@ -820,6 +902,12 @@ func GameUpdate(c *gin.Context) {
 	}
 	if req.SteamAppID != nil {
 		updates["steam_app_id"] = *req.SteamAppID
+	}
+	if req.RequiredAge != nil {
+		updates["required_age"] = *req.RequiredAge
+	}
+	if req.IsFree != nil {
+		updates["is_free"] = *req.IsFree
 	}
 	if strings.TrimSpace(req.Title) != "" {
 		updates["title"] = strings.TrimSpace(req.Title)
@@ -836,14 +924,35 @@ func GameUpdate(c *gin.Context) {
 	if req.ShortDescription != "" {
 		updates["short_description"] = strings.TrimSpace(req.ShortDescription)
 	}
+	if req.SupportedLangs != "" {
+		updates["supported_langs"] = strings.TrimSpace(req.SupportedLangs)
+	}
+	if req.Reviews != "" {
+		updates["reviews"] = req.Reviews
+	}
+	if req.PCRequirements != "" {
+		updates["pc_requirements"] = req.PCRequirements
+	}
+	if req.MacRequirements != "" {
+		updates["mac_requirements"] = req.MacRequirements
+	}
+	if req.LinuxRequirements != "" {
+		updates["linux_requirements"] = req.LinuxRequirements
+	}
 	if req.HeaderImage != "" {
 		updates["header_image"] = strings.TrimSpace(req.HeaderImage)
 	}
 	if req.Website != "" {
 		updates["website"] = strings.TrimSpace(req.Website)
 	}
+	if req.Developers != "" {
+		updates["developers"] = strings.TrimSpace(req.Developers)
+	}
 	if req.Publishers != "" {
 		updates["publishers"] = strings.TrimSpace(req.Publishers)
+	}
+	if req.Platforms != "" {
+		updates["platforms"] = strings.TrimSpace(req.Platforms)
 	}
 	if req.Genres != "" {
 		updates["genres"] = strings.TrimSpace(req.Genres)
@@ -894,6 +1003,9 @@ func GameUpdate(c *gin.Context) {
 	}
 	if req.SteamScore != nil {
 		updates["steam_score"] = *req.SteamScore
+	}
+	if req.Recommendations != nil {
+		updates["recommendations"] = *req.Recommendations
 	}
 	if req.Downloads != nil {
 		updates["downloads"] = *req.Downloads

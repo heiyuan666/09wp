@@ -14,14 +14,23 @@ export interface IGameItem {
   id: number
   category_id?: number
   steam_appid?: number
+  required_age?: number
+  is_free?: boolean
   title: string
   cover: string
   banner: string
   video_url: string
   short_description?: string
+  supported_languages?: string
+  reviews?: string
+  pc_requirements?: string
+  mac_requirements?: string
+  linux_requirements?: string
   header_image?: string
   website?: string
+  developers?: string
   publishers?: string
+  platforms?: string
   genres?: string
   tags?: string
   price_text?: string
@@ -37,6 +46,7 @@ export interface IGameItem {
   developer: string
   rating: number
   steam_score: number
+  recommendations_total?: number
   downloads: number
   likes: number
   dislikes: number
@@ -65,12 +75,18 @@ export interface IGameResource {
 
 export interface ISteamAppDetail {
   appid: number
+  required_age?: number
   name: string
   type: string
   is_free: boolean
   short_description: string
   detailed_description: string
   about_the_game: string
+  supported_languages?: string
+  reviews?: string
+  pc_requirements?: string
+  mac_requirements?: string
+  linux_requirements?: string
   header_image: string
   capsule_image: string
   background: string
@@ -81,6 +97,7 @@ export interface ISteamAppDetail {
   categories: string[]
   genres: string[]
   tags: string[]
+  platforms?: { windows?: boolean; mac?: boolean; linux?: boolean }
   screenshots: string[]
   video_url: string
   price_text: string
@@ -90,6 +107,7 @@ export interface ISteamAppDetail {
   price_discount: number
   metacritic_score: number
   metacritic_url: string
+  recommendations_total?: number
   release_date: string
   coming_soon: boolean
   cc: string

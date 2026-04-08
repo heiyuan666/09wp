@@ -6,7 +6,7 @@
 import { createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { onBeforeUnmount, onMounted, ref } from 'vue'
-import GameHomeReact from './GameHomeReact'
+import GameHomeStoreReact from './GameHomeStoreReact'
 
 defineOptions({
   name: 'PublicGameHomeView',
@@ -18,7 +18,7 @@ let root: Root | null = null
 onMounted(() => {
   if (!mountEl.value) return
   root = createRoot(mountEl.value)
-  root.render(createElement(GameHomeReact))
+  root.render(createElement(GameHomeStoreReact))
 })
 
 onBeforeUnmount(() => {

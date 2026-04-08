@@ -368,3 +368,46 @@ func SeedSystemConfig() error {
 	}
 	return DB().Create(&cfg).Error
 }
+
+// SeedGameCategories 初始化默认游戏分类（存在则跳过，不存在则补齐）
+func SeedGameCategories() error {
+	defaultCategories := []model.GameCategory{
+		{Name: "动作", Slug: "action", Description: "动作类游戏"},
+		{Name: "竞速", Slug: "racing", Description: "竞速类游戏"},
+		{Name: "恐怖", Slug: "horror", Description: "恐怖类游戏"},
+		{Name: "多人", Slug: "multiplayer", Description: "多人联机游戏"},
+		{Name: "解谜", Slug: "puzzle", Description: "解谜类游戏"},
+		{Name: "体育", Slug: "sports", Description: "体育竞技类游戏"},
+		{Name: "角色扮演", Slug: "rpg", Description: "角色扮演类游戏"},
+		{Name: "科幻", Slug: "scifi", Description: "科幻题材游戏"},
+	}
+
+	for _, item := range defaultCategories {
+		var exists model.GameCategory
+		err := DB().Where("slug = ?", item.Slug).First(&exists).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			if err := DB().Create(&item).Error; err != nil {
+				return err
+			}
+			continue
+		}
+		if err != nil {
+			return err
+		}
+
+		updates := map[string]interface{}{}
+		if strings.TrimSpace(exists.Name) != item.Name {
+			updates["name"] = item.Name
+		}
+		if strings.TrimSpace(exists.Description) == "" {
+			updates["description"] = item.Description
+		}
+		if len(updates) > 0 {
+			if err := DB().Model(&model.GameCategory{}).Where("id = ?", exists.ID).Updates(updates).Error; err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}

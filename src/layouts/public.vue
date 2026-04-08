@@ -29,7 +29,7 @@
     <main :class="['public-main', { 'is-home': isHomeRoute, 'is-search': isSearchRoute }]">
       <router-view />
     </main>
-    <footer v-if="!isHomeRoute" class="public-footer" id="contact">
+    <footer v-if="!isHomeRoute && !isGameRoute" class="public-footer" id="contact">
       <div class="inner footer-grid">
         <div class="about">
           <div class="footer-brand clickable" @click="goHome">
