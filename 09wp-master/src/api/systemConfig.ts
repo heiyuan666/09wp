@@ -59,8 +59,12 @@ export interface ISystemConfig {
   douban_cover_proxy_url?: string
   /** TG 等资源外链封面返代，如 https://wsrv.nl/?url= */
   tg_image_proxy_url?: string
+  /** 豆瓣信息卡搜索缓存 TTL（秒），0 使用默认 SearchTTL */
+  douban_search_cache_ttl?: number
   /** TMDB v4 Read Access Token（用于前台搜索补充影视信息） */
   tmdb_bearer_token?: string
+  /** TMDB 信息卡搜索缓存 TTL（秒），0 使用默认 SearchTTL */
+  tmdb_search_cache_ttl?: number
   /** TMDB 请求代理地址（可选），如 http://127.0.0.1:7890 */
   tmdb_proxy_url?: string
   /** 豆瓣聚合接口基地址（默认 https://api.iyuns.com） */

@@ -80,6 +80,59 @@ func doubanSearchURLByWpy(baseURL, keyword string) (string, error) {
 	return doubanExtractURL(payload), nil
 }
 
+// doubanSearchURLByDbsearch 调用 /api/dbsearch（与 iyuns 文档一致），返回第一条结果的豆瓣条目链接。
+func doubanSearchURLByDbsearch(baseURL, keyword string) (string, error) {
+	base := strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	if base == "" {
+		base = "https://api.iyuns.com"
+	}
+	endpoint := base + "/api/dbsearch?search=" + url.QueryEscape(keyword)
+	req, err := http.NewRequest(http.MethodGet, endpoint, nil)
+	if err != nil {
+		return "", err
+	}
+	client := &http.Client{Timeout: 12 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode >= 400 {
+		return "", fmt.Errorf("dbsearch HTTP %d", resp.StatusCode)
+	}
+	var root map[string]any
+	if err := json.Unmarshal(raw, &root); err != nil {
+		return "", err
+	}
+	data, ok := root["data"].([]any)
+	if !ok || len(data) == 0 {
+		return "", nil
+	}
+	first, ok := data[0].(map[string]any)
+	if !ok {
+		return "", nil
+	}
+	link, _ := first["link"].(string)
+	link = strings.TrimSpace(link)
+	if link != "" && doubanURLRegex.MatchString(link) {
+		return doubanURLRegex.FindString(link), nil
+	}
+	return "", nil
+}
+
+// doubanSearchFirstDoubanURL 先 wpysso，无有效豆瓣链接再 dbsearch（关键词检索场景下 dbsearch 更稳定）。
+func doubanSearchFirstDoubanURL(baseURL, keyword string) (string, error) {
+	u, err := doubanSearchURLByWpy(baseURL, keyword)
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(u) != "" {
+		return u, nil
+	}
+	return doubanSearchURLByDbsearch(baseURL, keyword)
+}
+
 func doubanFetchDetail(baseURL, doubanURL string) (map[string]any, error) {
 	base := strings.TrimRight(strings.TrimSpace(baseURL), "/")
 	if base == "" {
@@ -124,44 +177,43 @@ func PublicDoubanSearch(c *gin.Context) {
 		}
 	}
 	apiBaseURL := "https://api.iyuns.com"
+	cacheTTL := time.Duration(0)
 	var cfg model.SystemConfig
 	if err := database.DB().Order("id ASC").First(&cfg).Error; err == nil {
 		if v := strings.TrimSpace(cfg.IYunsAPIBaseURL); v != "" {
 			apiBaseURL = v
 		}
+		if cfg.DoubanSearchCacheTTL > 0 {
+			cacheTTL = time.Duration(cfg.DoubanSearchCacheTTL) * time.Second
+		}
 	}
 
 	var cached model.DoubanSearchCache
 	if err := database.DB().Where("keyword = ?", keyword).First(&cached).Error; err == nil {
-		if !cached.HasItem {
-			payload := doubanSearchCachePayload{Enabled: true, Item: nil}
+		// 仅命中「有结果」时短路；HasItem=false 不短路，避免旧逻辑写死的「无结果」永久生效。
+		if cached.HasItem {
+			payload := doubanSearchCachePayload{
+				Enabled: true,
+				Item: map[string]any{
+					"title":    cached.Title,
+					"overview": cached.Overview,
+					"poster":   cached.Poster,
+					"year":     cached.Year,
+					"rating":   cached.Rating,
+					"url":      cached.DoubanURL,
+				},
+			}
 			if raw, err := json.Marshal(payload); err == nil {
-				service.SetSearchCache(context.Background(), cacheKey, raw)
+				service.SetSearchCacheWithTTL(context.Background(), cacheKey, raw, cacheTTL)
 			}
 			response.OK(c, payload)
 			return
 		}
-		payload := doubanSearchCachePayload{
-			Enabled: true,
-			Item: map[string]any{
-				"title":    cached.Title,
-				"overview": cached.Overview,
-				"poster":   cached.Poster,
-				"year":     cached.Year,
-				"rating":   cached.Rating,
-				"url":      cached.DoubanURL,
-			},
-		}
-		if raw, err := json.Marshal(payload); err == nil {
-			service.SetSearchCache(context.Background(), cacheKey, raw)
-		}
-		response.OK(c, payload)
-		return
 	} else if err != gorm.ErrRecordNotFound {
 		// ignore cache error
 	}
 
-	doubanURL, err := doubanSearchURLByWpy(apiBaseURL, q)
+	doubanURL, err := doubanSearchFirstDoubanURL(apiBaseURL, q)
 	if err != nil {
 		response.Error(c, 500, "豆瓣检索失败")
 		return
@@ -174,7 +226,7 @@ func PublicDoubanSearch(c *gin.Context) {
 		}).FirstOrCreate(&model.DoubanSearchCache{}).Error
 		payload := doubanSearchCachePayload{Enabled: true, Item: nil}
 		if raw, err := json.Marshal(payload); err == nil {
-			service.SetSearchCache(context.Background(), cacheKey, raw)
+			service.SetSearchCacheWithTTL(context.Background(), cacheKey, raw, cacheTTL)
 		}
 		response.OK(c, payload)
 		return
@@ -215,7 +267,7 @@ func PublicDoubanSearch(c *gin.Context) {
 	if title == "" {
 		payload := doubanSearchCachePayload{Enabled: true, Item: nil}
 		if raw, err := json.Marshal(payload); err == nil {
-			service.SetSearchCache(context.Background(), cacheKey, raw)
+			service.SetSearchCacheWithTTL(context.Background(), cacheKey, raw, cacheTTL)
 		}
 		response.OK(c, payload)
 		return
@@ -232,7 +284,7 @@ func PublicDoubanSearch(c *gin.Context) {
 		},
 	}
 	if raw, err := json.Marshal(payload); err == nil {
-		service.SetSearchCache(context.Background(), cacheKey, raw)
+		service.SetSearchCacheWithTTL(context.Background(), cacheKey, raw, cacheTTL)
 	}
 	response.OK(c, payload)
 }
