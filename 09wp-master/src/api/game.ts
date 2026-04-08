@@ -113,6 +113,18 @@ export const gameUpdate = (id: number | string, data: Partial<IGameItem>) =>
 export const gameDelete = (id: number | string) => request.delete<ICommonResponse<unknown>>(`/game/${id}`)
 export const gameSteamAppDetail = (appid: number | string, params?: { cc?: string; l?: string }) =>
   request.get<ICommonResponse<ISteamAppDetail>>(`/game/steam/app/${appid}`, { params })
+export const gameSteamSearch = (name: string, params?: { cc?: string; l?: string }) =>
+  request.get<
+    ICommonResponse<{
+      search_term: string
+      count: number
+      hint?: string
+      data: Array<{ appid: number; name: string; icon: string; match_score: number }>
+    }>
+  >(
+    '/game/steam/search',
+    { params: { name, ...(params || {}) } },
+  )
 
 export const gameResourceList = (gameId: number | string) =>
   request.get<ICommonResponse<IGameResource[]>>('/game/resource/list', { params: { game_id: gameId } })

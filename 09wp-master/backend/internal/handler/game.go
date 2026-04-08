@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -332,6 +333,137 @@ type steamAppDetailsResp struct {
 			URL   string `json:"url"`
 		} `json:"metacritic"`
 	} `json:"data"`
+}
+
+// ------------------------- Steam 搜索接口 -------------------------
+
+var steamCNWordReg = regexp.MustCompile(`[\p{Han}]+`)
+var steamENWordReg = regexp.MustCompile(`[a-zA-Z0-9\s]{3,}`)
+
+type steamStoreSearchResp struct {
+	Items []struct {
+		ID        uint64 `json:"id"`
+		Name      string `json:"name"`
+		TinyImage string `json:"tiny_image"`
+	} `json:"items"`
+}
+
+// GameSteamSearch 基于关键词从 Steam storesearch 检索候选游戏列表（用于后台下拉选择 appid）。
+func GameSteamSearch(c *gin.Context) {
+	name := strings.TrimSpace(c.Query("name"))
+	if name == "" {
+		gameErr(c, "name is required")
+		return
+	}
+	cc := strings.TrimSpace(c.DefaultQuery("cc", "CN"))
+	lang := strings.TrimSpace(c.DefaultQuery("l", "schinese"))
+	if cc == "" {
+		cc = "CN"
+	}
+	if lang == "" {
+		lang = "schinese"
+	}
+	cc = strings.ToUpper(cc)
+	hasHan := steamCNWordReg.MatchString(name)
+
+	// 1) 智能拆分中英文：原始、中文段、英文/数字段
+	cnParts := steamCNWordReg.FindAllString(name, -1)
+	enParts := steamENWordReg.FindAllString(name, -1)
+	cnQuery := strings.TrimSpace(strings.Join(cnParts, " "))
+	enQuery := strings.TrimSpace(strings.Join(enParts, " "))
+
+	tasks := make([]string, 0, 3)
+	addTask := func(s string) {
+		s = strings.TrimSpace(s)
+		if s == "" {
+			return
+		}
+		for _, t := range tasks {
+			if t == s {
+				return
+			}
+		}
+		tasks = append(tasks, s)
+	}
+	addTask(name)
+	addTask(cnQuery)
+	addTask(enQuery)
+
+	type itemOut struct {
+		AppID      uint64 `json:"appid"`
+		Name       string `json:"name"`
+		Icon       string `json:"icon"`
+		MatchScore int    `json:"match_score"`
+	}
+	combined := map[uint64]*itemOut{}
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	for _, term := range tasks {
+		endpoint := fmt.Sprintf(
+			"https://store.steampowered.com/api/storesearch/?term=%s&l=%s&cc=%s",
+			url.QueryEscape(term),
+			url.QueryEscape(lang),
+			url.QueryEscape(cc),
+		)
+		resp, err := client.Get(endpoint)
+		if err != nil {
+			continue
+		}
+		raw, _ := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			continue
+		}
+		var payload steamStoreSearchResp
+		if err := json.Unmarshal(raw, &payload); err != nil {
+			continue
+		}
+		for _, it := range payload.Items {
+			if it.ID == 0 || strings.TrimSpace(it.Name) == "" {
+				continue
+			}
+			if existing, ok := combined[it.ID]; ok {
+				existing.MatchScore++
+				continue
+			}
+			combined[it.ID] = &itemOut{
+				AppID:      it.ID,
+				Name:       strings.TrimSpace(it.Name),
+				Icon:       strings.TrimSpace(it.TinyImage),
+				MatchScore: 1,
+			}
+		}
+	}
+
+	list := make([]itemOut, 0, len(combined))
+	for _, v := range combined {
+		list = append(list, *v)
+	}
+	sort.SliceStable(list, func(i, j int) bool {
+		if list[i].MatchScore != list[j].MatchScore {
+			return list[i].MatchScore > list[j].MatchScore
+		}
+		return list[i].AppID < list[j].AppID
+	})
+	if len(list) > 50 {
+		list = list[:50]
+	}
+
+	gameOK(c, gin.H{
+		"search_term": name,
+		"count":       len(list),
+		"data":        list,
+		"hint": func() string {
+			if len(list) > 0 {
+				return ""
+			}
+			// Steam storesearch 对纯中文关键词经常返回空；提示用户改用英文名/手动填写 AppID。
+			if hasHan {
+				return "Steam storesearch 对中文关键词可能返回空结果。建议输入英文名（如 Star Valley）或直接填写 Steam AppID。"
+			}
+			return ""
+		}(),
+	})
 }
 
 func GameSteamAppDetail(c *gin.Context) {
