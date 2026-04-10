@@ -69,6 +69,8 @@ func SeedMenus() error {
 		"/demo/vxeTable",
 		"/system/role",
 		"/system/menu",
+		// 历史误挂载：软件库（应独立于游戏管理）
+		"/game/software",
 		// 历史号卡菜单（现在挪到“网盘资源”下）
 		"/system/haoka",
 	}
@@ -162,10 +164,10 @@ func SeedMenus() error {
 	if err := ensureMenu("/game/resources", "下载资源", "HOutline:ArrowDownTrayIcon", &gameDir.ID, 3); err != nil {
 		return err
 	}
-	if err := ensureMenu("/game/reviews", "游戏评论", "HOutline:ChatBubbleLeftRightIcon", &gameDir.ID, 4); err != nil {
+	if err := ensureMenu("/game/reviews", "游戏评论", "HOutline:ChatBubbleLeftRightIcon", &gameDir.ID, 5); err != nil {
 		return err
 	}
-	if err := ensureMenu("/game/feedbacks", "资源失效反馈", "HOutline:ExclamationTriangleIcon", &gameDir.ID, 5); err != nil {
+	if err := ensureMenu("/game/feedbacks", "资源失效反馈", "HOutline:ExclamationTriangleIcon", &gameDir.ID, 6); err != nil {
 		return err
 	}
 
@@ -174,6 +176,31 @@ func SeedMenus() error {
 		return err
 	}
 	if err := ensureMenu("/game/nav-menu", "导航栏设置", "HOutline:Bars3BottomLeftIcon", &gameDir.ID, 91); err != nil {
+		return err
+	}
+
+	// 软件库管理：独立于“游戏管理”的侧边栏目录
+	var softwareDir model.Menu
+	if err := DB().Where("type = ? AND title = ?", "directory", "软件库管理").First(&softwareDir).Error; err != nil {
+		softwareDir = model.Menu{
+			Type:   "directory",
+			Path:   "",
+			Title:  "软件库管理",
+			Icon:   "HOutline:SquaresPlusIcon",
+			Order:  3,
+			Status: 1,
+		}
+		if err := DB().Create(&softwareDir).Error; err != nil {
+			return err
+		}
+	}
+	if err := ensureMenu("/software/list", "软件管理", "HOutline:ListBulletIcon", &softwareDir.ID, 1); err != nil {
+		return err
+	}
+	if err := ensureMenu("/software/categories", "分类管理", "HOutline:TagIcon", &softwareDir.ID, 2); err != nil {
+		return err
+	}
+	if err := ensureMenu("/software/versions", "版本管理", "HOutline:QueueListIcon", &softwareDir.ID, 3); err != nil {
 		return err
 	}
 

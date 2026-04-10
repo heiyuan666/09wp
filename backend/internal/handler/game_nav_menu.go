@@ -143,6 +143,21 @@ func PublicGameNavMenus(c *gin.Context) {
 		response.Error(c, 500, "查询失败")
 		return
 	}
+
+	// 兼容历史菜单路径：/game/software 在前台不存在页面，统一改为 /software
+	for i := range list {
+		p := strings.TrimSpace(list[i].Path)
+		if p == "/game/software" {
+			list[i].Path = "/software"
+		}
+	}
+
+	// 首次未配置导航时，兜底给出首页与软件库入口，避免前台空导航
+	if len(list) == 0 && pos == "top_nav" {
+		list = []model.GameNavigationMenu{
+			{Title: "首页", Path: "/", Position: "top_nav", SortOrder: 100, Visible: true},
+			{Title: "软件库", Path: "/software", Position: "top_nav", SortOrder: 90, Visible: true},
+		}
+	}
 	response.OK(c, gin.H{"list": list})
 }
-
