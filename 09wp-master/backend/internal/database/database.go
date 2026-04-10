@@ -64,6 +64,9 @@ func AutoMigrate() error {
 		&model.GameCategory{},
 		&model.Game{},
 		&model.GameResource{},
+		&model.SoftwareCategory{},
+		&model.Software{},
+		&model.SoftwareVersion{},
 		&model.GameResourceFeedback{},
 		&model.GameReview{},
 		&model.GameReviewVote{},
@@ -407,6 +410,8 @@ func ensureUTF8MB4Collation() error {
 		"user_resource_submissions",
 		"games",
 		"game_resources",
+		"softwares",
+		"software_versions",
 		"rss_subscriptions",
 	}
 	for _, t := range tables {

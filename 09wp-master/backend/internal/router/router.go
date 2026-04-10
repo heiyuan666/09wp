@@ -93,6 +93,9 @@ func SetupRouter(jwtSecret string) *gin.Engine {
 	api.POST("/game/reviews/:id/vote", middleware.AuthMiddleware(jwtSecret, false), handler.GameReviewVote)
 	api.GET("/game/public/config", handler.GetPublicGameSiteConfig)
 	api.GET("/game/public/nav-menus", handler.PublicGameNavMenus)
+	api.GET("/software/categories", handler.PublicSoftwareCategoryList)
+	api.GET("/software/list", handler.PublicSoftwareList)
+	api.GET("/software/detail/:id", handler.PublicSoftwareDetail)
 	api.POST("/quark/transfer", middleware.AuthMiddleware(jwtSecret, true), handler.QuarkTransferByLink)
 	api.POST("/netdisk/transfer", middleware.AuthMiddleware(jwtSecret, true), handler.NetdiskTransferByLink)
 	api.POST("/netdisk/transfer/batch", middleware.AuthMiddleware(jwtSecret, true), handler.NetdiskTransferBatchByLinks)
@@ -306,6 +309,27 @@ func SetupRouter(jwtSecret string) *gin.Engine {
 
 		// 封面/截图上传
 		gameAdmin.POST("/upload", handler.GameUpload)
+		gameAdmin.POST("/software/upload-cover", handler.SoftwareUploadCover)
+
+		// 软件分类
+		gameAdmin.GET("/software/categories", handler.SoftwareCategoryList)
+		gameAdmin.POST("/software/categories", handler.SoftwareCategoryCreate)
+		gameAdmin.PUT("/software/categories/:id", handler.SoftwareCategoryUpdate)
+		gameAdmin.DELETE("/software/categories/:id", handler.SoftwareCategoryDelete)
+		gameAdmin.PUT("/software/categories/:id/sort", handler.SoftwareCategorySort)
+
+		// 软件
+		gameAdmin.GET("/software", handler.SoftwareList)
+		gameAdmin.GET("/software/:id", handler.SoftwareDetail)
+		gameAdmin.POST("/software", handler.SoftwareCreate)
+		gameAdmin.PUT("/software/:id", handler.SoftwareUpdate)
+		gameAdmin.DELETE("/software/:id", handler.SoftwareDelete)
+
+		// 软件版本
+		gameAdmin.GET("/software/:id/versions", handler.SoftwareVersionList)
+		gameAdmin.POST("/software/:id/versions", handler.SoftwareVersionCreate)
+		gameAdmin.PUT("/software/versions/:version_id", handler.SoftwareVersionUpdate)
+		gameAdmin.DELETE("/software/versions/:version_id", handler.SoftwareVersionDelete)
 
 		// 评论管理（避免与前台 /api/v1/game/reviews 冲突，统一挂到 /game/admin/reviews）
 		gameAdmin.GET("/admin/reviews", handler.AdminGameReviewList)
