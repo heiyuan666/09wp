@@ -20,6 +20,7 @@ export default function HomeReact() {
     homePromos,
     hotSearches,
     hotResources,
+    hotByCategory,
     latestResources,
     doubanHot,
     friendLinks,
@@ -145,8 +146,28 @@ export default function HomeReact() {
                       <a key={it.id} className={styles.rankRow} href={`/r/${it.id}`}>
                         <span className={styles.rankNo}>{idx + 1}</span>
                         <span className={styles.rankText}>{it.title}</span>
-                        <span className={styles.rankMeta}>{Number(it.view_count || 0)} 浏览</span>
                       </a>
+                    ))
+                  ) : (
+                    <Text type="tertiary" size="small">
+                      暂无数据
+                    </Text>
+                  )}
+                </div>
+              </TabPane>
+              <TabPane tab="分类热门" itemKey="hot_by_category">
+                <div className={styles.rankList}>
+                  {hotByCategory.length > 0 ? (
+                    hotByCategory.slice(0, 8).map((group) => (
+                      <div key={group.category_id} style={{ marginBottom: 14 }}>
+                        <Text strong>{group.category_name}</Text>
+                        {group.resources.slice(0, 5).map((it, idx) => (
+                          <a key={it.id} className={styles.rankRow} href={`/r/${it.id}`}>
+                            <span className={styles.rankNo}>{idx + 1}</span>
+                            <span className={styles.rankText}>{it.title}</span>
+                          </a>
+                        ))}
+                      </div>
                     ))
                   ) : (
                     <Text type="tertiary" size="small">

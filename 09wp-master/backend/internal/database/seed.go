@@ -203,6 +203,9 @@ func SeedMenus() error {
 	if err := ensureMenu("/software/versions", "版本管理", "HOutline:QueueListIcon", &softwareDir.ID, 3); err != nil {
 		return err
 	}
+	if err := ensureMenu("/software/settings", "站点设置", "HOutline:AdjustmentsHorizontalIcon", &softwareDir.ID, 4); err != nil {
+		return err
+	}
 
 	var sysDir model.Menu
 	if err := DB().Where("type = ? AND title = ?", "directory", "系统管理").First(&sysDir).Error; err != nil {
@@ -236,6 +239,9 @@ func SeedMenus() error {
 	if err := ensureMenu("/system/nav-menu", "导航菜单管理", "HOutline:Bars3BottomLeftIcon", &sysDir.ID, 4); err != nil {
 		return err
 	}
+	if err := ensureMenu("/system/global-search", "全网搜接口", "HOutline:GlobeAsiaAustraliaIcon", &sysDir.ID, 4); err != nil {
+		return err
+	}
 	if err := ensureMenu("/system/netdisk-credentials", "网盘凭证", "HOutline:KeyIcon", &sysDir.ID, 5); err != nil {
 		return err
 	}
@@ -248,10 +254,57 @@ func SeedMenus() error {
 	if err := ensureMenu("/system/rss-subscriptions", "RSS订阅抓取", "HOutline:RssIcon", &sysDir.ID, 8); err != nil {
 		return err
 	}
+	if err := ensureMenu("/system/cleanup-logs", "清理任务日志", "HOutline:ClipboardDocumentListIcon", &sysDir.ID, 9); err != nil {
+		return err
+	}
 
 	// 号卡（外部套餐同步/管理）挪到“网盘资源”目录下
 	if err := ensureMenu("/netdisk/haoka", "号卡", "HOutline:Squares2X2Icon", &netdiskDir.ID, 99); err != nil {
 		return err
+	}
+
+	return nil
+}
+
+// SeedSoftwareCategories 初始化默认软件分类（按 slug 存在则跳过，不存在则补齐；名称不一致时更新）
+func SeedSoftwareCategories() error {
+	defaultCategories := []model.SoftwareCategory{
+		{Name: "效率工具", Slug: "productivity", SortOrder: 60, Status: 1},
+		{Name: "开发工具", Slug: "development", SortOrder: 50, Status: 1},
+		{Name: "设计软件", Slug: "design", SortOrder: 40, Status: 1},
+		{Name: "系统工具", Slug: "system", SortOrder: 30, Status: 1},
+		{Name: "媒体播放", Slug: "media", SortOrder: 20, Status: 1},
+		{Name: "网络工具", Slug: "network", SortOrder: 10, Status: 1},
+	}
+
+	for _, item := range defaultCategories {
+		var exists model.SoftwareCategory
+		err := DB().Where("slug = ?", item.Slug).First(&exists).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			if err := DB().Create(&item).Error; err != nil {
+				return err
+			}
+			continue
+		}
+		if err != nil {
+			return err
+		}
+
+		updates := map[string]interface{}{}
+		if strings.TrimSpace(exists.Name) != item.Name {
+			updates["name"] = item.Name
+		}
+		if exists.SortOrder != item.SortOrder {
+			updates["sort_order"] = item.SortOrder
+		}
+		if exists.Status != item.Status {
+			updates["status"] = item.Status
+		}
+		if len(updates) > 0 {
+			if err := DB().Model(&model.SoftwareCategory{}).Where("id = ?", exists.ID).Updates(updates).Error; err != nil {
+				return err
+			}
+		}
 	}
 
 	return nil
@@ -350,62 +403,77 @@ func SeedSystemConfig() error {
 	}
 
 	cfg := model.SystemConfig{
-		SiteTitle:                  "网盘资源导航系统",
-		AdminEmail:                 "admin@example.com",
-		SupportEmail:               "support@example.com",
-		ContactPhone:               "",
-		ContactQQ:                  "",
-		LogoURL:                    "",
-		FaviconURL:                 "",
-		SeoKeywords:                "网盘,资源,导航",
-		SeoDescription:             "网盘资源导航管理系统",
-		IcpRecord:                  "",
-		FooterText:                 "©️零九cdn www.09cdn.com",
-		ClarityProjectID:           "",
-		ClarityEnabled:             false,
-		FriendLinks:                "[]",
-		AllowRegister:              true,
-		HaokaUserID:                "",
-		HaokaSecret:                "",
-		HaokaSyncEnabled:           false,
-		HaokaSyncInterval:          3600,
-		HaokaOrderURL:              "",
-		HaokaAgentRegURL:           "",
-		SubmissionNeedReview:       true,
-		SubmissionAutoTransfer:     false,
-		ResourceDetailAutoTransfer: false,
-		SmtpHost:                   "",
-		SmtpPort:                   25,
-		SmtpUser:                   "",
-		SmtpPass:                   "",
-		SmtpFrom:                   "",
-		TgBotToken:                 "",
-		TgProxyURL:                 "",
-		TgAPIID:                    0,
-		TgAPIHash:                  "",
-		TgSession:                  "",
-		PanCheckBaseURL:            config.DefaultPanCheckBaseURL,
-		TgChannelChatID:            "",
-		TgSyncEnabled:              false,
-		TgSyncInterval:             300,
-		TgDefaultCatID:             0,
-		TgLastUpdateID:             0,
-		QuarkCookie:                "",
-		QuarkAutoSave:              false,
-		QuarkTargetFolderID:        "0",
-		DoubanHotNavEnabled:        false,
-		HotSearchEnabled:           true,
-		ShowSiteTitle:              true,
-		HomeRankBoardEnabled:       true,
-		DoubanCoverProxyURL:        "",
-		TgImageProxyURL:            "",
-		AutoDeleteInvalidLinks:     false,
-		HideInvalidLinksInSearch:   false,
-		MeiliEnabled:               false,
-		MeiliURL:                   "http://127.0.0.1:7700",
-		MeiliAPIKey:                "",
-		MeiliIndexName:             "resources",
-		UpdatedBy:                  0,
+		SiteTitle:                             "网盘资源导航系统",
+		AdminEmail:                            "admin@example.com",
+		SupportEmail:                          "support@example.com",
+		ContactPhone:                          "",
+		ContactQQ:                             "",
+		LogoURL:                               "",
+		FaviconURL:                            "",
+		SeoKeywords:                           "网盘,资源,导航",
+		SeoDescription:                        "网盘资源导航管理系统",
+		IcpRecord:                             "",
+		FooterText:                            "©️零九cdn www.09cdn.com",
+		ClarityProjectID:                      "",
+		ClarityEnabled:                        false,
+		FriendLinks:                           "[]",
+		AllowRegister:                         true,
+		HaokaUserID:                           "",
+		HaokaSecret:                           "",
+		HaokaSyncEnabled:                      false,
+		HaokaSyncInterval:                     3600,
+		HaokaOrderURL:                         "",
+		HaokaAgentRegURL:                      "",
+		SubmissionNeedReview:                  true,
+		SubmissionAutoTransfer:                false,
+		ResourceDetailAutoTransfer:            false,
+		ResourceDetailEachClickFreshShare:     false,
+		SmtpHost:                              "",
+		SmtpPort:                              25,
+		SmtpUser:                              "",
+		SmtpPass:                              "",
+		SmtpFrom:                              "",
+		TgBotToken:                            "",
+		TgProxyURL:                            "",
+		TgAPIID:                               0,
+		TgAPIHash:                             "",
+		TgSession:                             "",
+		PanCheckBaseURL:                       config.DefaultPanCheckBaseURL,
+		TgChannelChatID:                       "",
+		TgSyncEnabled:                         false,
+		TgSyncInterval:                        300,
+		TgDefaultCatID:                        0,
+		TgLastUpdateID:                        0,
+		QuarkCookie:                           "",
+		QuarkAutoSave:                         false,
+		QuarkTargetFolderID:                   "0",
+		DoubanHotNavEnabled:                   false,
+		HotSearchEnabled:                      true,
+		ShowSiteTitle:                         true,
+		HomeRankBoardEnabled:                  true,
+		DoubanCoverProxyURL:                   "",
+		DoubanSearchEnabled:                   true,
+		TgImageProxyURL:                       "",
+		TMDBEnabled:                           true,
+		IYunsAPIBaseURL:                       "https://api.iyuns.com",
+		GlobalSearchEnabled:                   false,
+		GlobalSearchLinkCheckEnabled:          false,
+		GlobalSearchAPIURL:                    "https://api.iyuns.com/api/wpysso",
+		GlobalSearchCloudTypes:                "",
+		GlobalSearchDefaultCategoryID:         0,
+		GlobalSearchAutoTransfer:              true,
+		GlobalSearchCleanupEnabled:            false,
+		GlobalSearchCleanupDays:               7,
+		GlobalSearchCleanupMinutes:            0,
+		GlobalSearchCleanupDeleteNetdiskFiles: false,
+		AutoDeleteInvalidLinks:                false,
+		HideInvalidLinksInSearch:              false,
+		ThunderDownloadEnabled:              false,
+		MeiliEnabled:                          false,
+		MeiliURL:                              "http://127.0.0.1:7700",
+		MeiliAPIKey:                           "",
+		MeiliIndexName:                        "resources",
+		UpdatedBy:                             0,
 	}
 	return DB().Create(&cfg).Error
 }
@@ -425,6 +493,26 @@ func SeedGameSiteConfig() error {
 		FaviconURL:     "",
 		SeoKeywords:    "游戏,下载,资源",
 		SeoDescription: "游戏下载资源聚合站",
+		UpdatedBy:      0,
+	}
+	return DB().Create(&cfg).Error
+}
+
+// SeedSoftwareSiteConfig 初始化软件库站点配置（单例）
+func SeedSoftwareSiteConfig() error {
+	var cnt int64
+	if err := DB().Model(&model.SoftwareSiteConfig{}).Count(&cnt).Error; err != nil {
+		return err
+	}
+	if cnt > 0 {
+		return nil
+	}
+	cfg := model.SoftwareSiteConfig{
+		SiteTitle:      "软件库",
+		LogoURL:        "",
+		FaviconURL:     "",
+		SeoKeywords:    "软件,下载,工具",
+		SeoDescription: "精选多平台软件资源与下载指引",
 		UpdatedBy:      0,
 	}
 	return DB().Create(&cfg).Error

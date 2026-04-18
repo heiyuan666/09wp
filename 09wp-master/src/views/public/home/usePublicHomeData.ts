@@ -4,6 +4,7 @@ import {
   defaultConfig,
   siteNameFallback,
   type DoubanHotItem,
+  type HomeHotCategoryItem,
   type HomeResourceItem,
   type HotSearchItem,
   type NavMenuItem,
@@ -17,12 +18,13 @@ export function usePublicHomeData() {
   const [homePromos, setHomePromos] = useState<NavMenuItem[]>([])
   const [hotSearches, setHotSearches] = useState<HotSearchItem[]>([])
   const [hotResources, setHotResources] = useState<HomeResourceItem[]>([])
+  const [hotByCategory, setHotByCategory] = useState<HomeHotCategoryItem[]>([])
   const [latestResources, setLatestResources] = useState<HomeResourceItem[]>([])
   const [doubanHot, setDoubanHot] = useState<DoubanHotItem[]>([])
   const year = useMemo(() => new Date().getFullYear(), [])
   const friendLinks = Array.isArray(config.friend_links) ? config.friend_links : []
-  const siteTitle = config.site_title || siteNameFallback
-  const siteDescription = config.seo_description || defaultConfig.seo_description
+  const siteTitle = (config.site_title || '').trim() || siteNameFallback
+  const siteDescription = (config.seo_description || '').trim() || siteTitle || defaultConfig.seo_description
   const [themeMode, setThemeMode] = useState<'light' | 'dark'>(() => {
     const cached = localStorage.getItem('themeMode')
     if (cached === 'light' || cached === 'dark') return cached
@@ -58,6 +60,7 @@ export function usePublicHomeData() {
               }
               if (rankOn) {
                 if (Array.isArray(d.hot)) setHotResources(d.hot)
+                if (Array.isArray(d.hot_by_category)) setHotByCategory(d.hot_by_category)
                 if (Array.isArray(d.latest)) setLatestResources(d.latest)
               }
             })
@@ -146,6 +149,7 @@ export function usePublicHomeData() {
     homePromos,
     hotSearches,
     hotResources,
+    hotByCategory,
     latestResources,
     doubanHot,
     friendLinks,

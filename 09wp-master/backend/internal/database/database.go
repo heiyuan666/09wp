@@ -54,12 +54,15 @@ func AutoMigrate() error {
 		&model.Menu{},
 		&model.SearchHotWord{},
 		&model.NavigationMenu{},
+		&model.GlobalSearchAPI{},
 		&model.GameSiteConfig{},
+		&model.SoftwareSiteConfig{},
 		&model.GameNavigationMenu{},
 		&model.TMDBSearchCache{},
 		&model.DoubanSearchCache{},
 		&model.NetdiskCredential{},
 		&model.ResourceFeedback{},
+		&model.CleanupTaskLog{},
 		&model.RSSSubscription{},
 		&model.GameCategory{},
 		&model.Game{},
@@ -143,6 +146,16 @@ func ensureRequiredColumns() error {
 			return err
 		}
 	}
+	if !m.HasColumn(&model.SystemConfig{}, "TMDBEnabled") {
+		if err := m.AddColumn(&model.SystemConfig{}, "TMDBEnabled"); err != nil {
+			return err
+		}
+	}
+	if !m.HasColumn(&model.SystemConfig{}, "DoubanSearchEnabled") {
+		if err := m.AddColumn(&model.SystemConfig{}, "DoubanSearchEnabled"); err != nil {
+			return err
+		}
+	}
 	if !m.HasColumn(&model.SystemConfig{}, "IYunsAPIBaseURL") {
 		if err := m.AddColumn(&model.SystemConfig{}, "IYunsAPIBaseURL"); err != nil {
 			return err
@@ -175,6 +188,11 @@ func ensureRequiredColumns() error {
 	}
 	if !m.HasColumn(&model.SystemConfig{}, "HideInvalidLinksInSearch") {
 		if err := m.AddColumn(&model.SystemConfig{}, "HideInvalidLinksInSearch"); err != nil {
+			return err
+		}
+	}
+	if !m.HasColumn(&model.SystemConfig{}, "GlobalSearchLinkCheckEnabled") {
+		if err := m.AddColumn(&model.SystemConfig{}, "GlobalSearchLinkCheckEnabled"); err != nil {
 			return err
 		}
 	}
@@ -261,6 +279,7 @@ func ensureRequiredColumns() error {
 		{"system_configs", "submission_need_review", "ALTER TABLE system_configs ADD COLUMN submission_need_review tinyint(1) NOT NULL DEFAULT 1"},
 		{"system_configs", "submission_auto_transfer", "ALTER TABLE system_configs ADD COLUMN submission_auto_transfer tinyint(1) NOT NULL DEFAULT 0"},
 		{"system_configs", "resource_detail_auto_transfer", "ALTER TABLE system_configs ADD COLUMN resource_detail_auto_transfer tinyint(1) NOT NULL DEFAULT 0"},
+		{"system_configs", "resource_detail_each_click_fresh_share", "ALTER TABLE system_configs ADD COLUMN resource_detail_each_click_fresh_share tinyint(1) NOT NULL DEFAULT 0"},
 		{"system_configs", "haoka_user_id", "ALTER TABLE system_configs ADD COLUMN haoka_user_id varchar(120) NOT NULL DEFAULT ''"},
 		{"system_configs", "haoka_secret", "ALTER TABLE system_configs ADD COLUMN haoka_secret varchar(255) NOT NULL DEFAULT ''"},
 		{"system_configs", "haoka_sync_enabled", "ALTER TABLE system_configs ADD COLUMN haoka_sync_enabled tinyint(1) NOT NULL DEFAULT 0"},
@@ -275,6 +294,8 @@ func ensureRequiredColumns() error {
 		{"system_configs", "tmdb_bearer_token", "ALTER TABLE system_configs ADD COLUMN tmdb_bearer_token varchar(600) NOT NULL DEFAULT ''"},
 		{"system_configs", "tmdb_search_cache_ttl", "ALTER TABLE system_configs ADD COLUMN tmdb_search_cache_ttl int NOT NULL DEFAULT 0"},
 		{"system_configs", "tmdb_proxy_url", "ALTER TABLE system_configs ADD COLUMN tmdb_proxy_url varchar(500) NOT NULL DEFAULT ''"},
+		{"system_configs", "tmdb_enabled", "ALTER TABLE system_configs ADD COLUMN tmdb_enabled tinyint(1) NOT NULL DEFAULT 1"},
+		{"system_configs", "douban_search_enabled", "ALTER TABLE system_configs ADD COLUMN douban_search_enabled tinyint(1) NOT NULL DEFAULT 1"},
 		{"system_configs", "iyuns_api_base_url", "ALTER TABLE system_configs ADD COLUMN iyuns_api_base_url varchar(255) NOT NULL DEFAULT 'https://api.iyuns.com'"},
 		{"system_configs", "footer_quick_links", "ALTER TABLE system_configs ADD COLUMN footer_quick_links text NOT NULL"},
 		{"system_configs", "footer_hot_platforms", "ALTER TABLE system_configs ADD COLUMN footer_hot_platforms text NOT NULL"},
@@ -318,13 +339,21 @@ func ensureRequiredColumns() error {
 		{"resources", "transfer_msg", "ALTER TABLE resources ADD COLUMN transfer_msg varchar(255) NOT NULL DEFAULT ''"},
 		{"resources", "transfer_retry_count", "ALTER TABLE resources ADD COLUMN transfer_retry_count int NOT NULL DEFAULT 0"},
 		{"resources", "transfer_last_at", "ALTER TABLE resources ADD COLUMN transfer_last_at datetime NULL"},
+		{"resources", "transfer_source_link", "ALTER TABLE resources ADD COLUMN transfer_source_link varchar(500) NOT NULL DEFAULT ''"},
+		{"resources", "transfer_source_extra", "ALTER TABLE resources ADD COLUMN transfer_source_extra text NOT NULL"},
 		{"game_resources", "resource_type", "ALTER TABLE game_resources ADD COLUMN resource_type varchar(30) NOT NULL DEFAULT 'game'"},
 		{"user_resource_submissions", "game_id", "ALTER TABLE user_resource_submissions ADD COLUMN game_id bigint unsigned NULL"},
 		{"resource_transfer_logs", "filter_log", "ALTER TABLE resource_transfer_logs ADD COLUMN filter_log text NOT NULL"},
 		{"system_configs", "meili_enabled", "ALTER TABLE system_configs ADD COLUMN meili_enabled tinyint(1) NOT NULL DEFAULT 0"},
+		{"system_configs", "global_search_link_check_enabled", "ALTER TABLE system_configs ADD COLUMN global_search_link_check_enabled tinyint(1) NOT NULL DEFAULT 0"},
+		{"system_configs", "global_search_url_sanitize_regex", "ALTER TABLE system_configs ADD COLUMN global_search_url_sanitize_regex varchar(512) NOT NULL DEFAULT ''"},
 		{"system_configs", "meili_url", "ALTER TABLE system_configs ADD COLUMN meili_url varchar(255) NOT NULL DEFAULT ''"},
 		{"system_configs", "meili_api_key", "ALTER TABLE system_configs ADD COLUMN meili_api_key varchar(255) NOT NULL DEFAULT ''"},
 		{"system_configs", "meili_index_name", "ALTER TABLE system_configs ADD COLUMN meili_index_name varchar(64) NOT NULL DEFAULT 'resources'"},
+		{"system_configs", "quark_cleanup_enabled", "ALTER TABLE system_configs ADD COLUMN quark_cleanup_enabled tinyint(1) NOT NULL DEFAULT 0"},
+		{"system_configs", "quark_cleanup_folder_id", "ALTER TABLE system_configs ADD COLUMN quark_cleanup_folder_id varchar(64) NOT NULL DEFAULT ''"},
+		{"system_configs", "quark_cleanup_older_than_minutes", "ALTER TABLE system_configs ADD COLUMN quark_cleanup_older_than_minutes int NOT NULL DEFAULT 60"},
+		{"system_configs", "quark_cleanup_interval_minutes", "ALTER TABLE system_configs ADD COLUMN quark_cleanup_interval_minutes int NOT NULL DEFAULT 5"},
 	}
 	for _, item := range requiredCols {
 		exists, err := columnExists(item.table, item.column)
@@ -356,6 +385,8 @@ func ensureRequiredColumns() error {
 	_ = DB().Exec(
 		"UPDATE system_configs SET iyuns_api_base_url = 'https://api.iyuns.com' WHERE iyuns_api_base_url = '' OR iyuns_api_base_url IS NULL",
 	).Error
+	_ = DB().Exec("UPDATE system_configs SET tmdb_enabled = 1 WHERE tmdb_enabled IS NULL").Error
+	_ = DB().Exec("UPDATE system_configs SET douban_search_enabled = 1 WHERE douban_search_enabled IS NULL").Error
 	return nil
 }
 

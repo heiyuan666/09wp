@@ -568,6 +568,10 @@ func ucproQueryTaskTopFids(client *http.Client, baseURL, cookie, taskID string, 
 		want = 1
 	}
 	maxRetry := 48
+	if strings.Contains(baseURL, "drive-pc.quark.cn") {
+		// 夸克全网搜场景：短等待，快速返回 pending/fallback，避免前端长时间卡住。
+		maxRetry = 12 // ~6s
+	}
 	if strings.Contains(baseURL, "pc-api.uc.cn") {
 		maxRetry = 100 // UC 转存任务偶发较慢，约 50s
 	}

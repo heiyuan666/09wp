@@ -82,6 +82,9 @@ func SetupRouter(jwtSecret string) *gin.Engine {
 	api.GET("/open/netdisk/resources/:id", handler.OpenNetdiskResourceDetail)
 	api.GET("/categories", handler.CategoryListPublic)
 	api.GET("/search", handler.ResourceSearch)
+	api.GET("/global-search", handler.PublicGlobalSearch)
+	api.POST("/global-search/claim", handler.PublicGlobalSearchClaim)
+	api.POST("/global-search/get-link", handler.PublicGlobalSearchGetLink)
 	api.POST("/feedbacks", handler.FeedbackCreate)
 	api.GET("/game/category/list", handler.GameCategoryList)
 	api.GET("/game/list", handler.GameList)
@@ -94,6 +97,7 @@ func SetupRouter(jwtSecret string) *gin.Engine {
 	api.GET("/game/public/config", handler.GetPublicGameSiteConfig)
 	api.GET("/game/public/nav-menus", handler.PublicGameNavMenus)
 	api.GET("/software/categories", handler.PublicSoftwareCategoryList)
+	api.GET("/software/public/config", handler.GetPublicSoftwareSiteConfig)
 	api.GET("/software/list", handler.PublicSoftwareList)
 	api.GET("/software/detail/:id", handler.PublicSoftwareDetail)
 	api.POST("/quark/transfer", middleware.AuthMiddleware(jwtSecret, true), handler.QuarkTransferByLink)
@@ -146,6 +150,21 @@ func SetupRouter(jwtSecret string) *gin.Engine {
 		systemConfig.PUT("", handler.UpdateSystemConfig)
 		systemConfig.POST("/meili/test", handler.AdminMeiliTest)
 		systemConfig.POST("/meili/reindex", handler.AdminMeiliReindex)
+		systemConfig.POST("/global-search/test", handler.AdminGlobalSearchTest)
+	}
+	globalSearchAdmin := api.Group("/system/global-search")
+	globalSearchAdmin.Use(middleware.AuthMiddleware(jwtSecret, true))
+	{
+		globalSearchAdmin.GET("/settings", handler.AdminGlobalSearchSettingsGet)
+		globalSearchAdmin.PUT("/settings", handler.AdminGlobalSearchSettingsPut)
+	}
+	globalSearchAPIs := api.Group("/system/global-search/apis")
+	globalSearchAPIs.Use(middleware.AuthMiddleware(jwtSecret, true))
+	{
+		globalSearchAPIs.GET("", handler.AdminGlobalSearchAPIList)
+		globalSearchAPIs.POST("", handler.AdminGlobalSearchAPICreate)
+		globalSearchAPIs.PUT("/:id", handler.AdminGlobalSearchAPIUpdate)
+		globalSearchAPIs.DELETE("/:id", handler.AdminGlobalSearchAPIDelete)
 	}
 
 	netdiskCred := api.Group("/system/netdisk-credentials")
@@ -276,6 +295,7 @@ func SetupRouter(jwtSecret string) *gin.Engine {
 		// 反馈管理
 		adminGroup.GET("/feedbacks", handler.AdminFeedbackList)
 		adminGroup.PUT("/feedbacks/:id/status", handler.AdminFeedbackUpdateStatus)
+		adminGroup.GET("/cleanup-logs", handler.AdminCleanupLogList)
 		// 游戏资源反馈（标记失效等）
 		adminGroup.GET("/game-feedbacks", handler.AdminGameFeedbackList)
 		adminGroup.PUT("/game-feedbacks/:id/status", handler.AdminGameFeedbackUpdateStatus)
@@ -310,6 +330,9 @@ func SetupRouter(jwtSecret string) *gin.Engine {
 		// 封面/截图上传
 		gameAdmin.POST("/upload", handler.GameUpload)
 		gameAdmin.POST("/software/upload-cover", handler.SoftwareUploadCover)
+
+		gameAdmin.GET("/software/site-config", handler.GetSoftwareSiteConfig)
+		gameAdmin.PUT("/software/site-config", handler.UpdateSoftwareSiteConfig)
 
 		// 软件分类
 		gameAdmin.GET("/software/categories", handler.SoftwareCategoryList)

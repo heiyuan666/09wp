@@ -2,6 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   siteCategories,
   siteDoubanInfoSearch,
+  siteGlobalGetLink,
+  siteGlobalSearch,
+  sitePublicConfig,
   siteResourcePage,
   siteSearch,
   siteTMDBSearch,
@@ -37,6 +40,25 @@ export function useSearchPage({ routeQueryQ, onReplaceSearch, onGoDetail }: Sear
   const [tmdbItem, setTmdbItem] = useState<ITMDBItem | null>(null)
   const [doubanEnabled, setDoubanEnabled] = useState(false)
   const [doubanItem, setDoubanItem] = useState<IDoubanInfoItem | null>(null)
+  const [globalLoading, setGlobalLoading] = useState(false)
+  /** 最近一次全网搜接口耗时（ms），与本地库搜索 elapsedMs 分开统计 */
+  const [globalSearchElapsedMs, setGlobalSearchElapsedMs] = useState(0)
+  const [globalCloudType, setGlobalCloudType] = useState('')
+  /** 后台「全网搜默认网盘类型」，用于前台未选手动筛选时与接口默认一致 */
+  const [globalSearchCloudTypesFromServer, setGlobalSearchCloudTypesFromServer] = useState('')
+  const [thunderDownloadEnabled, setThunderDownloadEnabled] = useState(false)
+  const [globalList, setGlobalList] = useState<
+    Array<{
+      url: string
+      password?: string
+      note?: string
+      datetime?: string
+      source?: string
+      cloud_type?: string
+      link_status?: 'valid' | 'invalid' | 'pending' | 'unknown'
+      images?: string[]
+    }>
+  >([])
 
   const [filters, setFilters] = useState<SearchFiltersState>({
     sort: 'relevance',
@@ -63,6 +85,22 @@ export function useSearchPage({ routeQueryQ, onReplaceSearch, onGoDetail }: Sear
       ].join('|'),
     [filters],
   )
+
+  const globalSearchCloudTypesForApi = useMemo(() => {
+    const manual = globalCloudType.trim()
+    const server = globalSearchCloudTypesFromServer.trim()
+    const merged = manual || server
+    return merged || undefined
+  }, [globalCloudType, globalSearchCloudTypesFromServer])
+
+  /** 下拉框展示值：手动优先；否则用后台默认的首个类型（多类型时仅展示第一项） */
+  const globalCloudTypeForSelect = useMemo(() => {
+    const manual = globalCloudType.trim()
+    if (manual) return manual
+    const server = globalSearchCloudTypesFromServer.trim()
+    if (!server) return ''
+    return server.split(',')[0]?.trim() || ''
+  }, [globalCloudType, globalSearchCloudTypesFromServer])
 
   useEffect(() => {
     setQInput(routeQueryQ)
@@ -116,6 +154,88 @@ export function useSearchPage({ routeQueryQ, onReplaceSearch, onGoDetail }: Sear
   useEffect(() => {
     void fetchList()
   }, [routeQueryQ, page, pageSize, filtersKey, fetchList])
+
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      try {
+        const { data: res } = await sitePublicConfig()
+        if (cancelled || res.code !== 200 || !res.data) return
+        setThunderDownloadEnabled(Boolean(res.data.thunder_download_enabled))
+        const gs = String((res.data as Record<string, unknown>).global_search_cloud_types || '')
+          .split(',')
+          .map((x) => x.trim().toLowerCase())
+          .filter(Boolean)
+          .join(',')
+        if (!cancelled) setGlobalSearchCloudTypesFromServer(gs)
+      } catch {
+        if (!cancelled) setThunderDownloadEnabled(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    const keyword = String(routeQueryQ || '').trim() || qInputRef.current.trim()
+    if (!keyword) {
+      setGlobalList([])
+      setGlobalSearchElapsedMs(0)
+      setGlobalLoading(false)
+      return
+    }
+    let cancelled = false
+    setGlobalLoading(true)
+    setGlobalSearchElapsedMs(0)
+    const startedAt = performance.now()
+    void (async () => {
+      try {
+        const { data: res } = await siteGlobalSearch({
+          q: keyword,
+          ...(globalSearchCloudTypesForApi ? { cloud_types: globalSearchCloudTypesForApi } : {}),
+        })
+        if (cancelled || res.code !== 200) return
+        setGlobalList(Array.isArray(res.data?.list) ? res.data.list.slice(0, 12) : [])
+      } catch {
+        if (!cancelled) setGlobalList([])
+      } finally {
+        if (cancelled) return
+        setGlobalSearchElapsedMs(Math.max(1, Math.round(performance.now() - startedAt)))
+        setGlobalLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [routeQueryQ, globalSearchCloudTypesForApi])
+
+  // 实时效果：有“检测中”项时，短轮询刷新全网搜状态（后端会过滤 invalid）。
+  useEffect(() => {
+    const keyword = String(routeQueryQ || '').trim() || qInputRef.current.trim()
+    if (!keyword || globalLoading || globalList.length === 0) return
+    const hasPending = globalList.some((it) => (it.link_status || 'pending') === 'pending')
+    if (!hasPending) return
+    let cancelled = false
+    const timer = window.setInterval(() => {
+      void (async () => {
+        try {
+          const { data: res } = await siteGlobalSearch({
+            q: keyword,
+            ...(globalSearchCloudTypesForApi ? { cloud_types: globalSearchCloudTypesForApi } : {}),
+          })
+          if (cancelled || res.code !== 200) return
+          setGlobalList(Array.isArray(res.data?.list) ? res.data.list.slice(0, 12) : [])
+        } catch {
+          // 静默失败，避免打断当前体验
+        }
+      })()
+    }, 3500)
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
+  }, [routeQueryQ, globalSearchCloudTypesForApi, globalLoading, globalList])
 
   useEffect(() => {
     const keyword = String(routeQueryQ || '').trim() || qInputRef.current.trim()
@@ -188,6 +308,36 @@ export function useSearchPage({ routeQueryQ, onReplaceSearch, onGoDetail }: Sear
     setThemeMode((prev) => (prev === 'light' ? 'dark' : 'light'))
   }, [])
 
+  const claimGlobalLink = useCallback(
+    async (item: {
+      url: string
+      password?: string
+      note?: string
+      source?: string
+      cloud_type?: string
+      images?: string[]
+    }) => {
+      const { data: res } = await siteGlobalGetLink({
+        url: item.url,
+        password: item.password || '',
+      })
+      if (res.code !== 200) {
+        const errMsg = String(res.message || '').trim() || '获取链接失败'
+        throw new Error(errMsg)
+      }
+      if (!res.data?.link) return null
+      return {
+        link: String(res.data.link),
+        platform: String(res.data.platform || ''),
+        message: String(res.data.message || ''),
+        status: String(res.data.status || ''),
+        ownShareSource: String(res.data.own_share_source || ''),
+        fallbackReason: String(res.data.fallback_reason || ''),
+      }
+    },
+    [],
+  )
+
   return {
     themeMode,
     toggleTheme,
@@ -205,11 +355,19 @@ export function useSearchPage({ routeQueryQ, onReplaceSearch, onGoDetail }: Sear
     doubanEnabled,
     doubanItem,
     list,
+    globalLoading,
+    globalSearchElapsedMs,
+    globalCloudType,
+    globalCloudTypeForSelect,
+    setGlobalCloudType,
+    globalList,
+    thunderDownloadEnabled,
     categories,
     filters,
     setFilter,
     onSearch,
     resetFilters,
     onGoDetail,
+    claimGlobalLink,
   }
 }

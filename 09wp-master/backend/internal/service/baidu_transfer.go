@@ -66,10 +66,11 @@ const baiduAppID = "250528"
 const baiduUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
 type BaiduTransferResult struct {
-	ShareID     string `json:"share_id"`
-	Title       string `json:"title,omitempty"`
-	Message     string `json:"message"`
-	OwnShareURL string `json:"own_share_url,omitempty"` // 转存后本人分享链接（replace_link_after_transfer 且平台支持时）
+	ShareID     string   `json:"share_id"`
+	Title       string   `json:"title,omitempty"`
+	Message     string   `json:"message"`
+	OwnShareURL string   `json:"own_share_url,omitempty"` // 转存后本人分享链接（replace_link_after_transfer 且平台支持时）
+	SavedPaths  []string `json:"saved_paths,omitempty"`
 }
 
 type baiduShareEntry struct {
@@ -300,6 +301,24 @@ func BaiduSaveByShareLink(link string, passOverride string) (BaiduTransferResult
 		title = strings.TrimSpace(fileNames[0])
 	}
 	out := BaiduTransferResult{ShareID: shareid, Title: title, Message: "转存成功"}
+	if len(fileNames) > 0 {
+		out.SavedPaths = make([]string, 0, len(fileNames))
+		prefix := strings.TrimRight(targetPath, "/")
+		if prefix == "" {
+			prefix = "/"
+		}
+		for _, name := range fileNames {
+			n := strings.TrimSpace(name)
+			if n == "" {
+				continue
+			}
+			if prefix == "/" {
+				out.SavedPaths = append(out.SavedPaths, "/"+n)
+			} else {
+				out.SavedPaths = append(out.SavedPaths, prefix+"/"+n)
+			}
+		}
+	}
 	if cred.ReplaceLinkAfterTransfer {
 		u, err := baiduReplaceWithOwnShareLink(client, transferCookie, bdstoken, targetPath, norm, fileNames)
 		if err != nil {
@@ -309,6 +328,76 @@ func BaiduSaveByShareLink(link string, passOverride string) (BaiduTransferResult
 		}
 	}
 	return out, nil
+}
+
+// DeleteBaiduByPaths 删除百度网盘中已转存路径（path 列表）。
+func DeleteBaiduByPaths(paths []string) error {
+	cred, err := LoadNetdiskCredentials()
+	if err != nil {
+		return err
+	}
+	picked := PickBaiduCookie(cred)
+	cookie := strings.TrimSpace(picked.Cookie)
+	if cookie == "" {
+		return fmt.Errorf("百度 Cookie 未配置")
+	}
+	client := &http.Client{Timeout: 25 * time.Second}
+	body, err := baiduHTTPGet(client, "https://pan.baidu.com/disk/main", cookie, "https://pan.baidu.com/")
+	if err != nil {
+		return err
+	}
+	bdstoken, _, _ := baiduParseTokens(string(body))
+	if strings.TrimSpace(bdstoken) == "" {
+		return fmt.Errorf("未能解析 bdstoken")
+	}
+	clean := make([]string, 0, len(paths))
+	seen := map[string]struct{}{}
+	for _, p := range paths {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		if _, ok := seen[p]; ok {
+			continue
+		}
+		seen[p] = struct{}{}
+		clean = append(clean, p)
+	}
+	if len(clean) == 0 {
+		return nil
+	}
+	filelist, _ := json.Marshal(clean)
+	form := url.Values{}
+	form.Set("filelist", string(filelist))
+	endpoint := fmt.Sprintf("https://pan.baidu.com/api/filemanager?async=2&onnest=fail&opera=delete&bdstoken=%s&clienttype=0&app_id=%s&web=1",
+		url.QueryEscape(bdstoken), baiduAppID)
+	req, err := http.NewRequest(http.MethodPost, endpoint, strings.NewReader(form.Encode()))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("User-Agent", baiduUA)
+	req.Header.Set("Accept", "application/json, text/plain, */*")
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
+	req.Header.Set("Referer", "https://pan.baidu.com/disk/main")
+	req.Header.Set("Cookie", cookie)
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(resp.Body)
+	var out map[string]any
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return fmt.Errorf("百度删除响应解析失败")
+	}
+	if errno := int(getFloat(out, "errno")); errno != 0 {
+		msg, _ := out["errmsg"].(string)
+		if msg == "" {
+			msg = fmt.Sprintf("errno=%d", errno)
+		}
+		return fmt.Errorf("百度删除失败: %s", msg)
+	}
+	return nil
 }
 
 // baiduExtractFromSharePage 兜底从分享页源码解析 fs_id / 文件名（对齐 xinyue-search BaiduWork.php parseResponse）

@@ -116,6 +116,8 @@ export const adminSubmissionReject = (id: number | string, data?: { reason?: str
 
 // 前台站点（无需管理员 token）
 export const siteHome = () => publicRequest.get<ICommonResponse<any>>('/home')
+/** 前台公开系统配置（含 thunder_download_enabled 等） */
+export const sitePublicConfig = () => publicRequest.get<ICommonResponse<Record<string, unknown>>>('/public/config')
 export const siteCategories = () => publicRequest.get<ICommonResponse<any[]>>('/categories')
 export const siteResourcePage = (params?: any) =>
   publicRequest.get<ICommonResponse<any>>('/resources', { params })
@@ -138,6 +140,48 @@ export const siteResourceLatestTransferLog = (id: string) =>
   >(`/resources/${id}/transfer/latest-log`)
 export const siteSearch = (params?: any) =>
   publicRequest.get<ICommonResponse<any>>('/search', { params })
+export const siteGlobalSearch = (params?: { q: string; cloud_types?: string }) =>
+  publicRequest.get<
+    ICommonResponse<{
+      list: Array<{
+        url: string
+        password?: string
+        note?: string
+        datetime?: string
+        source?: string
+        cloud_type?: string
+        link_status?: 'valid' | 'invalid' | 'pending' | 'unknown'
+        images?: string[]
+      }>
+      total: number
+    }>
+  >('/global-search', { params })
+export const siteGlobalClaim = (data: {
+  url: string
+  password?: string
+  note?: string
+  source?: string
+  cloud_type?: string
+  image?: string
+}) =>
+  publicRequest.post<
+    ICommonResponse<{
+      resource_id: number
+      exists: boolean
+      auto_transfer: boolean
+    }>
+  >('/global-search/claim', data)
+export const siteGlobalGetLink = (data: { url: string; password?: string }) =>
+  publicRequest.post<
+    ICommonResponse<{
+      platform: string
+      link: string
+      message?: string
+      status?: 'success' | 'pending' | 'fallback'
+      own_share_source?: string
+      fallback_reason?: string
+    }>
+  >('/global-search/get-link', data)
 
 export type ITMDBItem = {
   id: number

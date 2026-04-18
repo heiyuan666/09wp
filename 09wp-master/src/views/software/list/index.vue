@@ -25,6 +25,19 @@
 
     <el-table :data="list" size="small" style="width: 100%" v-loading="loading">
       <el-table-column prop="id" label="ID" width="90" />
+      <el-table-column label="图标" width="72">
+        <template #default="{ row }">
+          <el-image
+            v-if="row.icon_thumb || row.icon"
+            :src="row.icon_thumb || row.icon"
+            fit="cover"
+            style="width: 40px; height: 40px; border-radius: 8px"
+            :preview-src-list="row.icon ? [row.icon] : row.icon_thumb ? [row.icon_thumb] : []"
+            preview-teleported
+          />
+          <span v-else>-</span>
+        </template>
+      </el-table-column>
       <el-table-column label="封面" width="90">
         <template #default="{ row }">
           <el-image
@@ -147,25 +160,57 @@
           <el-input v-model="form.website" placeholder="https://..." />
         </el-form-item>
 
+        <el-form-item label="软件图标">
+          <div class="media-upload-row">
+            <el-upload
+              :show-file-list="false"
+              :auto-upload="true"
+              :before-upload="beforeUpload"
+              :http-request="uploadIcon"
+            >
+              <el-button type="primary">上传图标</el-button>
+            </el-upload>
+            <span class="media-hint">方形小图，用于列表；建议约 256×256，将生成缩略图</span>
+            <div v-if="form.icon" class="thumb-with-remove">
+              <el-image
+                :src="form.icon_thumb || form.icon"
+                fit="cover"
+                style="width: 64px; height: 64px; border-radius: 8px"
+                :preview-src-list="[form.icon]"
+                preview-teleported
+              />
+              <el-button type="danger" circle size="small" class="remove-img-btn" @click="clearIcon">
+                <el-icon><Close /></el-icon>
+              </el-button>
+            </div>
+          </div>
+        </el-form-item>
+
         <el-row :gutter="12">
           <el-col :span="12">
             <el-form-item label="封面上传">
-              <el-upload
-                :show-file-list="false"
-                :auto-upload="true"
-                :before-upload="beforeUpload"
-                :http-request="uploadCover"
-              >
-                <el-button type="primary">上传封面</el-button>
-              </el-upload>
-              <el-image
-                v-if="form.cover"
-                :src="form.cover_thumb || form.cover"
-                fit="cover"
-                style="margin-left: 10px; width: 64px; height: 64px; border-radius: 8px"
-                :preview-src-list="[form.cover]"
-                preview-teleported
-              />
+              <div class="media-upload-row">
+                <el-upload
+                  :show-file-list="false"
+                  :auto-upload="true"
+                  :before-upload="beforeUpload"
+                  :http-request="uploadCover"
+                >
+                  <el-button type="primary">上传封面</el-button>
+                </el-upload>
+                <div v-if="form.cover" class="thumb-with-remove">
+                  <el-image
+                    :src="form.cover_thumb || form.cover"
+                    fit="cover"
+                    style="width: 64px; height: 64px; border-radius: 8px"
+                    :preview-src-list="[form.cover]"
+                    preview-teleported
+                  />
+                  <el-button type="danger" circle size="small" class="remove-img-btn" @click="clearCover">
+                    <el-icon><Close /></el-icon>
+                  </el-button>
+                </div>
+              </div>
             </el-form-item>
           </el-col>
           <el-col :span="12">
@@ -207,6 +252,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, reactive } from 'vue'
+import { Close } from '@element-plus/icons-vue'
 import router from '@/router'
 import {
   softwareCategoryList,
@@ -238,6 +284,8 @@ const form = reactive<any>({
   version: '',
   cover: '',
   cover_thumb: '',
+  icon: '',
+  icon_thumb: '',
   screenshots_text: '',
   size: '',
   platforms_arr: [] as string[],
@@ -304,6 +352,8 @@ const resetForm = () => {
     version: '',
     cover: '',
     cover_thumb: '',
+    icon: '',
+    icon_thumb: '',
     screenshots_text: '',
     size: '',
     platforms_arr: [] as string[],
@@ -325,6 +375,8 @@ const openCreate = () => {
 const openEdit = (row: ISoftwareItem) => {
   resetForm()
   Object.assign(form, row)
+  form.icon = row.icon || ''
+  form.icon_thumb = row.icon_thumb || ''
   form.platforms_arr = splitPlatforms(row.platforms)
   form.screenshots_text = (Array.isArray(row.screenshots) ? row.screenshots : []).join('\n')
   form.download_direct_text = (Array.isArray(row.download_direct) ? row.download_direct : []).join('\n')
@@ -342,6 +394,8 @@ const save = async () => {
     version: form.version,
     cover: form.cover,
     cover_thumb: form.cover_thumb,
+    icon: form.icon,
+    icon_thumb: form.icon_thumb,
     screenshots: parseLines(form.screenshots_text),
     size: form.size,
     platforms: form.platforms_arr,
@@ -381,10 +435,28 @@ const beforeUpload = (file: File) => {
 
 const uploadCover = async (opt: any) => {
   const file = opt?.file as File
-  const { data: res } = await softwareUploadCover(file)
+  const { data: res } = await softwareUploadCover(file, 'cover')
   if (res.code !== 200) return
   form.cover = res.data?.url || ''
   form.cover_thumb = res.data?.thumb_url || ''
+}
+
+const uploadIcon = async (opt: any) => {
+  const file = opt?.file as File
+  const { data: res } = await softwareUploadCover(file, 'icon')
+  if (res.code !== 200) return
+  form.icon = res.data?.url || ''
+  form.icon_thumb = res.data?.thumb_url || ''
+}
+
+const clearCover = () => {
+  form.cover = ''
+  form.cover_thumb = ''
+}
+
+const clearIcon = () => {
+  form.icon = ''
+  form.icon_thumb = ''
 }
 
 onMounted(async () => {
@@ -414,5 +486,27 @@ onMounted(async () => {
   margin-top: 12px;
   display: flex;
   justify-content: flex-end;
+}
+.media-upload-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.media-hint {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  flex: 1 1 200px;
+}
+.thumb-with-remove {
+  position: relative;
+  display: inline-block;
+  vertical-align: middle;
+}
+.remove-img-btn {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  padding: 4px !important;
 }
 </style>

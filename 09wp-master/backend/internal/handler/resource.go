@@ -541,6 +541,36 @@ func ResourceAccessLink(c *gin.Context) {
 		return
 	}
 
+	var sysCfg model.SystemConfig
+	_ = database.DB().Order("id ASC").First(&sysCfg).Error
+	if sysCfg.ResourceDetailEachClickFreshShare {
+		if strings.TrimSpace(res.TransferStatus) == "pending" {
+			response.OK(c, gin.H{
+				"status":  "pending",
+				"message": "\u6b63\u5728\u4e3a\u4f60\u51c6\u5907\u53ef\u7528\u94fe\u63a5...",
+			})
+			return
+		}
+		links, msg, errFresh := service.DetailPageEachClickOwnShare(id, 3)
+		if errFresh != nil {
+			response.Error(c, 500, "\u751f\u6210\u5206\u4eab\u94fe\u63a5\u5931\u8d25: "+errFresh.Error())
+			return
+		}
+		ex := []string(nil)
+		if len(links) > 1 {
+			ex = append(ex, links[1:]...)
+		}
+		response.OK(c, gin.H{
+			"status":       "success",
+			"link":         links[0],
+			"extra_links":  ex,
+			"links":        links,
+			"message":      msg,
+			"fresh_share":  true,
+		})
+		return
+	}
+
 	currentLink := strings.TrimSpace(res.Link)
 	switch strings.TrimSpace(res.TransferStatus) {
 	case "success":

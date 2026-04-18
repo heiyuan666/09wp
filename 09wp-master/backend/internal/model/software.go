@@ -22,6 +22,8 @@ type Software struct {
 	Version           string         `gorm:"size:80;default:''" json:"version"`
 	Cover             string         `gorm:"size:500;default:''" json:"cover"`
 	CoverThumb        string         `gorm:"size:500;default:''" json:"cover_thumb"`
+	Icon              string         `gorm:"size:500;default:''" json:"icon"`        // 软件小图标（原图 URL）
+	IconThumb         string         `gorm:"size:500;default:''" json:"icon_thumb"` // 列表用缩略图
 	Screenshots       JSONStringList `gorm:"type:text;column:screenshots" json:"screenshots"`
 	Size              string         `gorm:"size:50;default:''" json:"size"`
 	Platforms         string         `gorm:"size:255;default:''" json:"platforms"` // 逗号分隔

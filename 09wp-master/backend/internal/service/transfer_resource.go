@@ -35,6 +35,7 @@ func transferSingleShareLink(resourceID uint64, link string, pass string, maxRet
 		var own string
 		var msg string
 		var filterLogJSON string
+		var savedFileIDsJSON string
 
 		switch platform {
 		case PlatformBaidu:
@@ -42,6 +43,11 @@ func transferSingleShareLink(resourceID uint64, link string, pass string, maxRet
 			r, e = BaiduSaveByShareLink(link, pass)
 			own = r.OwnShareURL
 			msg = r.Message
+			if len(r.SavedPaths) > 0 {
+				if b, er := json.Marshal(r.SavedPaths); er == nil {
+					savedFileIDsJSON = sanitizeForLegacyUTF8(string(b))
+				}
+			}
 		case PlatformQuark:
 			var r QuarkTransferResult
 			r, e = QuarkSaveByShareLink(link, pass)
@@ -52,11 +58,21 @@ func transferSingleShareLink(resourceID uint64, link string, pass string, maxRet
 					filterLogJSON = sanitizeForLegacyUTF8(string(b))
 				}
 			}
+			if len(r.SavedFids) > 0 {
+				if b, er := json.Marshal(r.SavedFids); er == nil {
+					savedFileIDsJSON = sanitizeForLegacyUTF8(string(b))
+				}
+			}
 		case PlatformUC:
 			var r UcTransferResult
 			r, e = UcSaveByShareLink(link, pass)
 			own = r.OwnShareURL
 			msg = r.Message
+			if len(r.SavedFids) > 0 {
+				if b, er := json.Marshal(r.SavedFids); er == nil {
+					savedFileIDsJSON = sanitizeForLegacyUTF8(string(b))
+				}
+			}
 		case PlatformPan115:
 			var r Pan115TransferResult
 			r, e = Pan115SaveByShareLink(link, pass)
@@ -82,6 +98,11 @@ func transferSingleShareLink(resourceID uint64, link string, pass string, maxRet
 			r, e = XunleiSaveByShareLink(link, pass)
 			own = r.OwnShareURL
 			msg = r.Message
+			if len(r.SavedFileIDs) > 0 {
+				if b, er := json.Marshal(r.SavedFileIDs); er == nil {
+					savedFileIDsJSON = sanitizeForLegacyUTF8(string(b))
+				}
+			}
 		default:
 			e = fmt.Errorf("暂未实现该网盘转存")
 		}
@@ -89,15 +110,16 @@ func transferSingleShareLink(resourceID uint64, link string, pass string, maxRet
 		attempt := i + 1
 		if e == nil {
 			_ = database.DB().Create(&model.ResourceTransferLog{
-				ResourceID:  resourceID,
-				Attempt:     attempt,
-				Platform:    platform.String(),
-				Status:      "success",
-				Message:     strings.TrimSpace(msg),
-				OldLink:     link,
-				NewLink:     strings.TrimSpace(own),
-				OwnShareURL: strings.TrimSpace(own),
-				FilterLog:   filterLogJSON,
+				ResourceID:   resourceID,
+				Attempt:      attempt,
+				Platform:     platform.String(),
+				Status:       "success",
+				Message:      strings.TrimSpace(msg),
+				OldLink:      link,
+				NewLink:      strings.TrimSpace(own),
+				OwnShareURL:  strings.TrimSpace(own),
+				FilterLog:    filterLogJSON,
+				SavedFileIDs: savedFileIDsJSON,
 			}).Error
 			return strings.TrimSpace(own), platform, strings.TrimSpace(msg), nil
 		}
@@ -139,6 +161,20 @@ func transferResourceMulti(resourceID uint64, maxRetry int, onlyIfAutoSave bool)
 	var res model.Resource
 	if err := database.DB().First(&res, resourceID).Error; err != nil {
 		return err
+	}
+
+	// 快照首次转存前的原始分享链接，供「详情页每次重新生成本人分享」使用。
+	if strings.TrimSpace(res.TransferSourceLink) == "" {
+		el := make([]string, 0, len(res.ExtraLinks))
+		for _, u := range res.ExtraLinks {
+			if t := strings.TrimSpace(u); t != "" {
+				el = append(el, t)
+			}
+		}
+		_ = database.DB().Model(&model.Resource{}).Where("id = ?", resourceID).Updates(map[string]any{
+			"transfer_source_link":  trimTo500(strings.TrimSpace(res.Link)),
+			"transfer_source_extra":   model.NormalizeExtraShareLinks(el),
+		}).Error
 	}
 
 	cred, credErr := LoadNetdiskCredentials()
@@ -229,6 +265,13 @@ func transferResourceMulti(resourceID uint64, maxRetry int, onlyIfAutoSave bool)
 		"transfer_msg":         "",
 	}
 
+	var sysCfg model.SystemConfig
+	if err := database.DB().Order("id ASC").First(&sysCfg).Error; err == nil && sysCfg.ResourceDetailEachClickFreshShare {
+		// 详情页「每次重新分享」：不在库里覆盖为本人链接，仅更新转存状态；对外仍展示原始分享。
+		delete(updates, "link")
+		delete(updates, "extra_links")
+	}
+
 	if okCount == 0 {
 		updates["transfer_status"] = "failed"
 		updates["transfer_msg"] = trimTo255(strings.Join(failMsgs, "; "))
@@ -316,4 +359,126 @@ func ShouldAutoTransferOnCreateMulti(cred model.NetdiskCredential, primary strin
 		}
 	}
 	return false
+}
+
+// resolveTransferSourceLinks 解析用于转存的原始分享链接（优先库内快照，其次成功日志中的 old_link，最后当前行）。
+func resolveTransferSourceLinks(res *model.Resource) (primary string, extras []string) {
+	if s := strings.TrimSpace(res.TransferSourceLink); s != "" {
+		ex := make([]string, 0, len(res.TransferSourceExtra))
+		for _, u := range res.TransferSourceExtra {
+			if t := strings.TrimSpace(u); t != "" {
+				ex = append(ex, t)
+			}
+		}
+		return s, ex
+	}
+	var logs []model.ResourceTransferLog
+	_ = database.DB().
+		Where("resource_id = ? AND status = ? AND old_link != ?", res.ID, "success", "").
+		Order("id ASC").
+		Find(&logs).Error
+	olds := make([]string, 0, len(logs))
+	seen := map[string]bool{}
+	for _, lg := range logs {
+		u := strings.TrimSpace(lg.OldLink)
+		if u == "" || seen[u] {
+			continue
+		}
+		seen[u] = true
+		olds = append(olds, u)
+	}
+	if len(olds) > 0 {
+		if len(olds) == 1 {
+			return olds[0], nil
+		}
+		return olds[0], olds[1:]
+	}
+	primary = strings.TrimSpace(res.Link)
+	for _, u := range res.ExtraLinks {
+		if t := strings.TrimSpace(u); t != "" {
+			extras = append(extras, t)
+		}
+	}
+	return primary, extras
+}
+
+// DetailPageEachClickOwnShare 详情页每次点击：从原始分享重新转存，返回新的本人分享链接，不写回 resources。
+func DetailPageEachClickOwnShare(resourceID uint64, maxRetry int) (links []string, displayMsg string, err error) {
+	if maxRetry < 1 {
+		maxRetry = 1
+	}
+	var res model.Resource
+	if err := database.DB().Where("id = ? AND status = 1", resourceID).First(&res).Error; err != nil {
+		return nil, "", err
+	}
+	primary, extras := resolveTransferSourceLinks(&res)
+	if strings.TrimSpace(primary) == "" {
+		return nil, "", fmt.Errorf("资源无有效分享链接")
+	}
+	pass := strings.TrimSpace(res.ExtractCode)
+
+	extrasWork := make([]string, len(extras))
+	copy(extrasWork, extras)
+
+	var slots []transferSlot
+	if primary != "" {
+		slots = append(slots, transferSlot{isPrimary: true, extraIdx: -1, link: primary})
+	}
+	for i, u := range extrasWork {
+		if strings.TrimSpace(u) == "" {
+			continue
+		}
+		slots = append(slots, transferSlot{isPrimary: false, extraIdx: i, link: strings.TrimSpace(u)})
+	}
+	var jobs []transferSlot
+	for _, s := range slots {
+		if DetectTransferPlatform(s.link) == PlatformUnknown {
+			continue
+		}
+		jobs = append(jobs, s)
+	}
+	if len(jobs) == 0 {
+		return nil, "", fmt.Errorf("无可用网盘链接（无法识别平台）")
+	}
+
+	outPrimary := ""
+	extrasOut := make([]string, len(extrasWork))
+	var failMsgs []string
+	okN := 0
+	for _, job := range jobs {
+		newURL, _, msg, e := transferSingleShareLink(resourceID, job.link, pass, maxRetry)
+		if e != nil {
+			failMsgs = append(failMsgs, trimTo255(e.Error()))
+			continue
+		}
+		okN++
+		u := strings.TrimSpace(newURL)
+		if job.isPrimary {
+			outPrimary = u
+		} else if job.extraIdx >= 0 && job.extraIdx < len(extrasOut) {
+			extrasOut[job.extraIdx] = u
+		}
+		_ = msg
+	}
+	if okN == 0 {
+		return nil, "", fmt.Errorf("%s", strings.Join(failMsgs, "; "))
+	}
+
+	links = []string{}
+	if strings.TrimSpace(outPrimary) != "" {
+		links = append(links, outPrimary)
+	}
+	for _, u := range extrasOut {
+		if strings.TrimSpace(u) != "" {
+			links = append(links, u)
+		}
+	}
+	if len(links) == 0 {
+		return nil, "", fmt.Errorf("未获得本人分享链接")
+	}
+	displayMsg = "已为你生成本次分享链接（每次点击重新转存）"
+	if okN < len(jobs) {
+		displayMsg = fmt.Sprintf("部分成功 %d/%d；%s", okN, len(jobs), displayMsg)
+	}
+	return links, displayMsg, nil
 }

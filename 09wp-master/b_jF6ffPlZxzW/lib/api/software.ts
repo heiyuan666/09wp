@@ -8,6 +8,8 @@ export type SoftwareItem = {
   version: string
   cover: string
   cover_thumb: string
+  icon: string
+  icon_thumb: string
   screenshots: string[]
   size: string
   platforms: string
