@@ -44,6 +44,12 @@
         <el-switch v-model="form.resource_detail_auto_transfer" />
         <span class="item-desc">开启后，用户在资源详情页点击“查看资源”时，后台才会触发自动转存。</span>
       </el-form-item>
+      <el-form-item label="每次点击重新分享">
+        <el-switch v-model="form.resource_detail_each_click_fresh_share" />
+        <span class="item-desc">
+          开启后，详情页每次点击「查看资源」都会从原始分享重新转存，并只把本次生成的本人网盘链接给用户；不会用新链接覆盖资源库里对外展示的地址（列表/详情仍显示原分享）。
+        </span>
+      </el-form-item>
 
       <el-divider content-position="left">号卡配置</el-divider>
       <el-form-item label="代理 user_id">
@@ -134,6 +140,9 @@
       </el-form-item>
 
       <el-divider content-position="left">TMDB API</el-divider>
+      <el-form-item label="启用 TMDB 信息卡">
+        <el-switch v-model="form.tmdb_enabled" />
+      </el-form-item>
       <el-form-item label="TMDB Token">
         <el-input
           v-model="form.tmdb_bearer_token"
@@ -169,6 +178,9 @@
         />
         <span class="item-desc">用于豆瓣检索（wpysso）和详情（dbys）接口基地址。</span>
       </el-form-item>
+      <el-form-item label="启用豆瓣信息卡">
+        <el-switch v-model="form.douban_search_enabled" />
+      </el-form-item>
       <el-form-item label="豆瓣搜索缓存清理时间(秒)">
         <el-input-number v-model="form.douban_search_cache_ttl" :min="0" :step="60" />
         <span class="item-desc">0 表示使用全局 SearchTTL；建议 300~3600。</span>
@@ -181,6 +193,14 @@
       </el-form-item>
       <el-form-item label="搜索中隐藏无效链接">
         <el-switch v-model="form.hide_invalid_links_in_search" />
+      </el-form-item>
+
+      <el-divider content-position="left">搜索页</el-divider>
+      <el-form-item label="开启迅雷下载">
+        <el-switch v-model="form.thunder_download_enabled" />
+        <span class="item-desc">
+          开启后，前台搜索「全网搜」中磁力链接显示「迅雷下载」按钮（依赖迅雷 JS-SDK 与用户本机已安装迅雷）；关闭则不展示。
+        </span>
       </el-form-item>
 
       <el-divider content-position="left">Meilisearch 搜索</el-divider>
@@ -299,6 +319,26 @@
       <el-form-item label="链接校验间隔(秒)">
         <el-input-number v-model="form.link_check_interval" :min="60" :max="86400" />
       </el-form-item>
+
+      <el-divider content-position="left">夸克网盘定时清理</el-divider>
+      <el-form-item label="启用定时清理">
+        <el-switch v-model="form.quark_cleanup_enabled" />
+        <span class="item-desc">
+          按创建时间删除指定目录<strong>当前一层</strong>内的旧文件/文件夹；逻辑参考
+          <a href="https://github.com/NamelessClub/quark_deleter/blob/main/quark_deleter_unified.py" target="_blank" rel="noopener noreferrer">quark_deleter</a>。使用「网盘凭证」中的夸克 Cookie。
+        </span>
+      </el-form-item>
+      <el-form-item label="清理目录 fid">
+        <el-input v-model="form.quark_cleanup_folder_id" placeholder="留空则用网盘凭证里的夸克转存目录；不可为根 0" />
+      </el-form-item>
+      <el-form-item label="早于(分钟)则删">
+        <el-input-number v-model="form.quark_cleanup_older_than_minutes" :min="1" :max="87600" />
+        <span class="item-desc">默认 60：创建时间早于约 1 小时的条目会被删。</span>
+      </el-form-item>
+      <el-form-item label="执行间隔(分钟)">
+        <el-input-number v-model="form.quark_cleanup_interval_minutes" :min="1" :max="1440" />
+      </el-form-item>
+
       <el-alert
         type="info"
         :closable="false"
@@ -356,6 +396,7 @@ const form = reactive<ISystemConfig>({
   submission_need_review: true,
   submission_auto_transfer: false,
   resource_detail_auto_transfer: false,
+  resource_detail_each_click_fresh_share: false,
   haoka_user_id: '',
   haoka_secret: '',
   haoka_sync_enabled: false,
@@ -382,12 +423,29 @@ const form = reactive<ISystemConfig>({
   douban_cover_proxy_url: '',
   tg_image_proxy_url: '',
   douban_search_cache_ttl: 0,
+  douban_search_enabled: true,
   tmdb_bearer_token: '',
+  tmdb_enabled: true,
   tmdb_search_cache_ttl: 0,
   tmdb_proxy_url: '',
   iyuns_api_base_url: 'https://api.iyuns.com',
+  global_search_enabled: false,
+  global_search_link_check_enabled: false,
+  global_search_api_url: 'https://api.iyuns.com/api/wpysso',
+  global_search_cloud_types: '',
+  global_search_default_category_id: 0,
+  global_search_auto_transfer: true,
+  global_search_cleanup_enabled: false,
+  global_search_cleanup_minutes: 30,
+  global_search_cleanup_days: 7,
+  global_search_cleanup_delete_netdisk_files: false,
   auto_delete_invalid_links: false,
   hide_invalid_links_in_search: false,
+  thunder_download_enabled: false,
+  quark_cleanup_enabled: false,
+  quark_cleanup_folder_id: '',
+  quark_cleanup_older_than_minutes: 60,
+  quark_cleanup_interval_minutes: 5,
   meili_enabled: false,
   meili_url: 'http://127.0.0.1:7700',
   meili_api_key: '',

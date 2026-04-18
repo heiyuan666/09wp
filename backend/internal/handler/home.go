@@ -24,6 +24,25 @@ func Home(c *gin.Context) {
 		return
 	}
 
+	hotByCategory := make([]gin.H, 0, len(categories))
+	for _, cat := range categories {
+		var catHot []model.Resource
+		_ = db.
+			Where("status = 1 AND category_id = ?", cat.ID).
+			Omit("Description").
+			Order("view_count DESC, id DESC").
+			Limit(10).
+			Find(&catHot).Error
+		if len(catHot) == 0 {
+			continue
+		}
+		hotByCategory = append(hotByCategory, gin.H{
+			"category_id":   cat.ID,
+			"category_name": cat.Name,
+			"resources":     catHot,
+		})
+	}
+
 	hotSearchOut := make([]gin.H, 0)
 	var cfg model.SystemConfig
 	showHotSearch := true
@@ -43,9 +62,10 @@ func Home(c *gin.Context) {
 	}
 
 	response.OK(c, gin.H{
-		"latest":       latest,
-		"hot":          hot,
-		"categories":   categories,
-		"hot_searches": hotSearchOut,
+		"latest":          latest,
+		"hot":             hot,
+		"hot_by_category": hotByCategory,
+		"categories":      categories,
+		"hot_searches":    hotSearchOut,
 	})
 }

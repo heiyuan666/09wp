@@ -166,6 +166,18 @@ export const staticRoutes = [
         meta: { title: '关键词屏蔽', icon: 'HOutline:ShieldCheckIcon', keepAlive: true },
       },
       {
+        path: '/system/cleanup-logs',
+        name: 'SystemCleanupLogsView',
+        component: () => import('@/views/system/cleanup-logs/index.vue'),
+        meta: { title: '清理任务日志', icon: 'HOutline:ClipboardDocumentListIcon', keepAlive: false },
+      },
+      {
+        path: '/system/global-search',
+        name: 'SystemGlobalSearchView',
+        component: () => import('@/views/system/global-search/index.vue'),
+        meta: { title: '全网搜接口', icon: 'HOutline:GlobeAsiaAustraliaIcon', keepAlive: false },
+      },
+      {
         path: '/profile',
         name: 'ProfileView',
         component: () => import('@/views/profile/index.vue'),

@@ -696,11 +696,13 @@ const openAccessLinkForRow = async (clickedUrl: string) => {
       const payload = (res.data || {}) as Record<string, unknown>
       const status = String(payload.status || '')
       const link = String(payload.link || '').trim()
+      const freshShare = Boolean(payload.fresh_share)
       const message = String(payload.message || '').trim() || '正在检查资源并生成可用链接...'
       resolvingText.value = message
 
       if ((status === 'success' || status === 'direct') && link) {
-        if (status === 'success') {
+        // 每次点击重新分享：仅合并本次返回的链接打开网盘，不整页刷新（避免把库内展示链覆盖回来）
+        if (status === 'success' && !freshShare) {
           await load()
         } else {
           mergeLinksFromAccessPayload(payload)

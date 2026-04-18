@@ -24,10 +24,11 @@ const (
 var reXunleiShare = regexp.MustCompile(`(?i)(?:https?://)?pan\.xunlei\.com/s/([a-zA-Z0-9_-]+)`)
 
 type XunleiTransferResult struct {
-	ShareID     string `json:"share_id"`
-	Title       string `json:"title,omitempty"`
-	Message     string `json:"message"`
-	OwnShareURL string `json:"own_share_url,omitempty"`
+	ShareID      string   `json:"share_id"`
+	Title        string   `json:"title,omitempty"`
+	Message      string   `json:"message"`
+	OwnShareURL  string   `json:"own_share_url,omitempty"`
+	SavedFileIDs []string `json:"saved_file_ids,omitempty"`
 }
 
 func XunleiSaveByShareLink(link string, passcodeOverride string) (XunleiTransferResult, error) {
@@ -99,9 +100,10 @@ func XunleiSaveByShareLink(link string, passcodeOverride string) (XunleiTransfer
 		}
 	}
 	out := XunleiTransferResult{
-		ShareID: shareID,
-		Title:   title,
-		Message: "转存成功",
+		ShareID:      shareID,
+		Title:        title,
+		Message:      "转存成功",
+		SavedFileIDs: append([]string{}, traceIDs...),
 	}
 	if cfg.ReplaceLinkAfterTransfer {
 		ownURL, err := xunleiCreateOwnShare(client, traceIDs, driveHeaders)
@@ -112,6 +114,49 @@ func XunleiSaveByShareLink(link string, passcodeOverride string) (XunleiTransfer
 		}
 	}
 	return out, nil
+}
+
+// DeleteXunleiFiles 删除迅雷网盘中的文件（file_id 列表）。
+func DeleteXunleiFiles(fileIDs []string) error {
+	cfg, err := LoadNetdiskCredentials()
+	if err != nil {
+		return err
+	}
+	picked := PickXunleiRefreshToken(cfg)
+	refreshToken := strings.TrimSpace(picked.Cookie)
+	if refreshToken == "" {
+		return fmt.Errorf("迅雷 refresh_token 未配置")
+	}
+	client := &http.Client{Timeout: 30 * time.Second}
+	accessToken, _, err := xunleiGetAccessToken(client, refreshToken)
+	if err != nil {
+		return err
+	}
+	captchaTok, err := xunleiInitCaptchaToken(client)
+	if err != nil {
+		return err
+	}
+	headers := xunleiHeaders(accessToken, captchaTok)
+	seen := map[string]struct{}{}
+	for _, id := range fileIDs {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		u := "https://api-pan.xunlei.com/drive/v1/files/" + url.PathEscape(id) + "?trash=true"
+		resp, err := xunleiDoJSON(client, http.MethodDelete, u, headers, nil)
+		if err != nil {
+			return err
+		}
+		if err := xunleiRespErr(resp); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func parseXunleiShare(link string) (string, string, error) {
@@ -507,4 +552,3 @@ func xunleiRespErr(m map[string]any) error {
 	}
 	return nil
 }
-

@@ -180,6 +180,10 @@ func PublicDoubanSearch(c *gin.Context) {
 	cacheTTL := time.Duration(0)
 	var cfg model.SystemConfig
 	if err := database.DB().Order("id ASC").First(&cfg).Error; err == nil {
+		if !cfg.DoubanSearchEnabled {
+			response.OK(c, gin.H{"enabled": false, "item": nil})
+			return
+		}
 		if v := strings.TrimSpace(cfg.IYunsAPIBaseURL); v != "" {
 			apiBaseURL = v
 		}
@@ -288,4 +292,3 @@ func PublicDoubanSearch(c *gin.Context) {
 	}
 	response.OK(c, payload)
 }
-

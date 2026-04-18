@@ -1,0 +1,25 @@
+{
+  "private": true,
+  "scripts": {
+    "dev": "nuxt dev",
+    "dev:clean": "node -e \"try{require('fs').rmSync('.nuxt',{recursive:true,force:true})}catch(e){}\" && nuxt dev",
+    "build": "nuxt build",
+    "preview": "nuxt preview",
+    "prepare": "nuxt prepare"
+  },
+  "dependencies": {
+    "@iconify-json/lucide": "latest",
+    "@iconify-json/simple-icons": "latest",
+    "@nuxt/ui": "latest",
+    "@nuxtjs/robots": "^6.0.6",
+    "@nuxtjs/sitemap": "^8.0.12",
+    "@resvg/resvg-js": "^2.6.2",
+    "@takumi-rs/core": "^1.0.3",
+    "nuxt": "latest",
+    "nuxt-module-feed": "^1.1.4",
+    "nuxt-og-image": "^6.3.8",
+    "nuxt-schema-org": "^6.0.4",
+    "tailwindcss": "latest",
+    "zod": "^3.24.1"
+  }
+}

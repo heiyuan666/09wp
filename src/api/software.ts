@@ -19,6 +19,8 @@ export interface ISoftwareItem {
   version: string
   cover: string
   cover_thumb: string
+  icon: string
+  icon_thumb: string
   screenshots: string[]
   size: string
   platforms: string
@@ -46,9 +48,10 @@ export interface ISoftwareVersionItem {
   updated_at: string
 }
 
-export const softwareUploadCover = (file: File) => {
+export const softwareUploadCover = (file: File, kind: 'cover' | 'icon' = 'cover') => {
   const form = new FormData()
   form.append('file', file)
+  form.append('kind', kind)
   return request.post<ICommonResponse<{ url: string; thumb_url: string; preview_url?: string }>>(
     '/game/software/upload-cover',
     form,

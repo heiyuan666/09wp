@@ -62,6 +62,9 @@ type Resource struct {
 	TransferMsg        string         `gorm:"size:255;default:''" json:"transfer_msg"`
 	TransferRetryCount int            `gorm:"default:0" json:"transfer_retry_count"`
 	TransferLastAt     *time.Time     `json:"transfer_last_at,omitempty"`
+	// TransferSourceLink / TransferSourceExtra 在首次后台转存开始时快照原始分享，用于「每次点击重新生成本人分享」时不丢失来源。
+	TransferSourceLink  string         `gorm:"size:500;default:''" json:"transfer_source_link"`
+	TransferSourceExtra JSONStringList `gorm:"type:text;column:transfer_source_extra" json:"transfer_source_extra"`
 	// idx_res_pub_hot: 前台 WHERE status=1 ORDER BY view_count（InnoDB 二级索引叶子含主键 id）
 	ViewCount uint64 `gorm:"default:0;index:idx_res_pub_hot,priority:2" json:"view_count"`
 	SortOrder int    `gorm:"default:0" json:"sort_order"`
@@ -91,6 +94,8 @@ type ResourceTransferLog struct {
 
 	// FilterLog 记录转存后的过滤日志（如广告关键词过滤），JSON 字符串
 	FilterLog string `gorm:"type:text" json:"filter_log,omitempty"`
+	// SavedFileIDs 转存后在本人网盘落地的文件/目录 ID 列表（JSON 数组），用于后续自动删除。
+	SavedFileIDs string `gorm:"type:text" json:"saved_file_ids,omitempty"`
 
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
@@ -157,7 +162,9 @@ type SystemConfig struct {
 	AllowRegister              bool   `gorm:"default:true" json:"allow_register"`
 	SubmissionNeedReview       bool   `gorm:"default:true" json:"submission_need_review"`
 	SubmissionAutoTransfer     bool   `gorm:"default:false" json:"submission_auto_transfer"`
-	ResourceDetailAutoTransfer bool   `gorm:"default:false" json:"resource_detail_auto_transfer"`
+	ResourceDetailAutoTransfer bool `gorm:"default:false" json:"resource_detail_auto_transfer"`
+	// ResourceDetailEachClickFreshShare 详情页每次点击「查看资源」都重新转存并返回新的本人分享链接，不覆盖库内对外展示链接。
+	ResourceDetailEachClickFreshShare bool `gorm:"default:false" json:"resource_detail_each_click_fresh_share"`
 	HaokaUserID                string `gorm:"size:120;default:''" json:"haoka_user_id"`
 	HaokaSecret                string `gorm:"size:255;default:''" json:"haoka_secret"`
 	HaokaSyncEnabled           bool   `gorm:"default:false" json:"haoka_sync_enabled"`
@@ -226,14 +233,48 @@ type SystemConfig struct {
 	TgImageProxyURL string `gorm:"size:500;default:''" json:"tg_image_proxy_url"`
 	// DoubanSearchCacheTTL 豆瓣信息卡搜索缓存 TTL（秒）。0 表示使用全局 SearchTTL。
 	DoubanSearchCacheTTL int `gorm:"default:0" json:"douban_search_cache_ttl"`
+	// DoubanSearchEnabled 是否启用前台豆瓣信息卡
+	DoubanSearchEnabled bool `gorm:"default:true" json:"douban_search_enabled"`
 	// TMDBBearerToken TMDB v4 Read Access Token（用于搜索补充影视信息）。
 	TMDBBearerToken string `gorm:"size:600;default:''" json:"tmdb_bearer_token"`
+	// TMDBEnabled 是否启用前台 TMDB 信息卡
+	TMDBEnabled bool `gorm:"default:true" json:"tmdb_enabled"`
 	// TMDBSearchCacheTTL TMDB 信息卡搜索缓存 TTL（秒）。0 表示使用全局 SearchTTL。
 	TMDBSearchCacheTTL int `gorm:"default:0" json:"tmdb_search_cache_ttl"`
 	// TMDBProxyURL TMDB 请求代理地址（可选），如：http://127.0.0.1:7890
 	TMDBProxyURL string `gorm:"size:500;default:''" json:"tmdb_proxy_url"`
 	// IYunsAPIBaseURL 聚合搜索/豆瓣信息接口基地址。
 	IYunsAPIBaseURL string `gorm:"size:255;default:'https://api.iyuns.com'" json:"iyuns_api_base_url"`
+	// 全网搜（wpysso）配置
+	GlobalSearchEnabled bool   `gorm:"default:false" json:"global_search_enabled"`
+	// 全网搜链接检测开关：开启后异步调用 /api/v1/links/check 并输出 link_status
+	GlobalSearchLinkCheckEnabled bool `gorm:"default:false" json:"global_search_link_check_enabled"`
+	GlobalSearchAPIURL  string `gorm:"size:255;default:''" json:"global_search_api_url"`
+	// cloud_types: baidu,aliyun,quark...
+	GlobalSearchCloudTypes string `gorm:"size:255;default:''" json:"global_search_cloud_types"`
+	// 一键获取链接时入库到哪个分类（0=自动选首个可用分类）
+	GlobalSearchDefaultCategoryID uint64 `gorm:"default:0" json:"global_search_default_category_id"`
+	// 点击“获取链接”后是否自动触发转存
+	GlobalSearchAutoTransfer bool `gorm:"default:true" json:"global_search_auto_transfer"`
+	// 定时清理全网搜来源资源（按创建时间）
+	GlobalSearchCleanupEnabled bool `gorm:"default:false" json:"global_search_cleanup_enabled"`
+	GlobalSearchCleanupDays    int  `gorm:"default:7" json:"global_search_cleanup_days"`
+	// 过期分钟数（优先级高于 days）。例如 30 表示 30 分钟后清理。
+	GlobalSearchCleanupMinutes int `gorm:"default:0" json:"global_search_cleanup_minutes"`
+	// 是否在清理时同步删除“本人网盘中的已转存文件”（当前先支持夸克）。
+	GlobalSearchCleanupDeleteNetdiskFiles bool `gorm:"default:false" json:"global_search_cleanup_delete_netdisk_files"`
+	// GlobalSearchURLSanitizeRegex 可选：从搜索返回的 url 字段中提取真实网盘链接（留空则使用内置规则）。
+	GlobalSearchURLSanitizeRegex string `gorm:"size:512;default:''" json:"global_search_url_sanitize_regex"`
+
+	// QuarkCleanupEnabled 定时清理夸克网盘指定目录内「创建时间」超过阈值的文件/文件夹（仅当前目录，不递归子目录）。
+	// 参考社区脚本思路：https://github.com/NamelessClub/quark_deleter/blob/main/quark_deleter_unified.py
+	QuarkCleanupEnabled bool `gorm:"default:false" json:"quark_cleanup_enabled"`
+	// QuarkCleanupFolderID 要清理的目录 fid；留空则尝试使用网盘凭证中的夸克转存目录（若为 0 或未配置则跳过，避免误删根目录）。
+	QuarkCleanupFolderID string `gorm:"size:64;default:''" json:"quark_cleanup_folder_id"`
+	// QuarkCleanupOlderThanMinutes 条目创建时间早于「现在减该分钟数」则删除（默认 60，即 1 小时）。
+	QuarkCleanupOlderThanMinutes int `gorm:"default:60" json:"quark_cleanup_older_than_minutes"`
+	// QuarkCleanupIntervalMinutes 后台任务执行间隔（默认 5 分钟一轮）。
+	QuarkCleanupIntervalMinutes int `gorm:"default:5" json:"quark_cleanup_interval_minutes"`
 
 	// AutoDeleteInvalidLinks 是否对失效链接资源自动“删除”
 	// 物理删除 resources，并清理对应的 user_favorites 记录（尽力兜底）。
@@ -242,6 +283,9 @@ type SystemConfig struct {
 	// HideInvalidLinksInSearch 是否在前台搜索中隐藏失效链接资源
 	// 若开启且请求未显式传 link_valid 参数，则强制 link_valid = true
 	HideInvalidLinksInSearch bool `gorm:"default:false" json:"hide_invalid_links_in_search"`
+
+	// ThunderDownloadEnabled 前台搜索「全网搜」磁力链是否展示迅雷 JS-SDK 下载按钮
+	ThunderDownloadEnabled bool `gorm:"default:false" json:"thunder_download_enabled"`
 
 	// Meilisearch：可选搜索引擎开关（开启则搜索优先走 Meili，失败自动回退 MySQL）
 	MeiliEnabled   bool      `gorm:"default:false" json:"meili_enabled"`
@@ -265,12 +309,37 @@ type NavigationMenu struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
+// GlobalSearchAPI 全网搜接口配置（支持多接口）
+type GlobalSearchAPI struct {
+	ID         uint64    `gorm:"primaryKey" json:"id"`
+	Name       string    `gorm:"size:120;not null" json:"name"`
+	APIURL     string    `gorm:"size:500;not null" json:"api_url"` // 完整接口地址，如 https://api.iyuns.com/api/wpysso
+	CloudTypes string    `gorm:"size:255;default:''" json:"cloud_types"`
+	Enabled    bool      `gorm:"default:true;index" json:"enabled"`
+	SortOrder  int       `gorm:"default:0" json:"sort_order"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
+}
+
 // GameSiteConfig 游戏站点专用配置（独立于网盘 SystemConfig）
 type GameSiteConfig struct {
 	ID             uint64    `gorm:"primaryKey" json:"id"`
 	SiteTitle      string    `gorm:"size:120;default:''" json:"site_title"`
 	LogoURL        string    `gorm:"size:255;default:''" json:"logo_url"`
 	FaviconURL     string    `gorm:"size:255;default:''" json:"favicon_url"`
+	SeoKeywords    string    `gorm:"size:255;default:''" json:"seo_keywords"`
+	SeoDescription string    `gorm:"size:500;default:''" json:"seo_description"`
+	UpdatedBy      uint64    `gorm:"default:0" json:"updated_by"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+}
+
+// SoftwareSiteConfig 软件库前台站点配置（独立于游戏与网盘 SystemConfig）
+type SoftwareSiteConfig struct {
+	ID             uint64    `gorm:"primaryKey" json:"id"`
+	SiteTitle      string    `gorm:"size:120;default:''" json:"site_title"`
+	LogoURL        string    `gorm:"size:500;default:''" json:"logo_url"`
+	FaviconURL     string    `gorm:"size:500;default:''" json:"favicon_url"`
 	SeoKeywords    string    `gorm:"size:255;default:''" json:"seo_keywords"`
 	SeoDescription string    `gorm:"size:500;default:''" json:"seo_description"`
 	UpdatedBy      uint64    `gorm:"default:0" json:"updated_by"`
@@ -335,6 +404,18 @@ type ResourceFeedback struct {
 	Status     string    `gorm:"size:20;default:'pending';index" json:"status"` // pending / processed
 	CreatedAt  time.Time `json:"created_at"`
 	UpdatedAt  time.Time `json:"updated_at"`
+}
+
+// CleanupTaskLog 定时清理任务日志（网盘文件删除/站内删除）
+type CleanupTaskLog struct {
+	ID         uint64    `gorm:"primaryKey" json:"id"`
+	Task       string    `gorm:"size:50;index;not null" json:"task"` // global_search_cleanup
+	ResourceID uint64    `gorm:"index;not null" json:"resource_id"`
+	Platform   string    `gorm:"size:32;index;default:''" json:"platform"` // quark/baidu/uc/xunlei
+	Action     string    `gorm:"size:32;index;not null" json:"action"`     // delete_netdisk_file/delete_resource
+	Status     string    `gorm:"size:20;index;not null" json:"status"`     // success/failed/skipped
+	Message    string    `gorm:"size:500;default:''" json:"message"`
+	CreatedAt  time.Time `json:"created_at"`
 }
 
 // SearchHotWord 用户搜索关键词统计（用于热搜榜）

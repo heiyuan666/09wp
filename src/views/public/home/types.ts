@@ -30,6 +30,14 @@ export type HomeResourceItem = {
   title: string
   cover?: string
   view_count?: number
+  viewCount?: number
+  category_id?: number
+}
+
+export type HomeHotCategoryItem = {
+  category_id: number
+  category_name: string
+  resources: HomeResourceItem[]
 }
 
 export type DoubanHotItem = {
@@ -38,7 +46,7 @@ export type DoubanHotItem = {
   url?: string
 }
 
-export const siteNameFallback = '懒盘搜索'
+export const siteNameFallback = '资源站'
 
 export const defaultTopNav: NavMenuItem[] = [
   { id: 1, title: '聚合搜索', path: '#' },
@@ -55,14 +63,14 @@ export const defaultPromos: NavMenuItem[] = [
 ]
 
 export const defaultConfig: PublicConfig = {
-  site_title: '网盘资源导航系统',
+  site_title: '',
   support_email: 'support@example.com',
   contact_phone: '',
   contact_qq: '',
   logo_url: '',
   favicon_url: '',
   seo_keywords: '网盘,资源,导航',
-  seo_description: '网盘资源导航管理系统',
+  seo_description: '',
   icp_record: '',
   footer_text: '©09cdn www.09cdn.com',
   allow_register: true,

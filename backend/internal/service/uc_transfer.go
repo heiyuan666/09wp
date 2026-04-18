@@ -16,11 +16,12 @@ const ucAPIBase = "https://pc-api.uc.cn"
 var ucSharePattern = regexp.MustCompile(`(?i)https?://(?:drive|yun)\.uc\.cn/s/([a-zA-Z0-9]+)`)
 
 type UcTransferResult struct {
-	ShareCode   string `json:"share_code"`
-	Title       string `json:"title,omitempty"`
-	Message     string `json:"message"`
-	Raw         any    `json:"raw,omitempty"`
-	OwnShareURL string `json:"own_share_url,omitempty"`
+	ShareCode   string   `json:"share_code"`
+	Title       string   `json:"title,omitempty"`
+	Message     string   `json:"message"`
+	Raw         any      `json:"raw,omitempty"`
+	OwnShareURL string   `json:"own_share_url,omitempty"`
+	SavedFids   []string `json:"saved_fids,omitempty"`
 }
 
 func ParseUcShare(link string) (shareCode string, passcode string, err error) {
@@ -205,6 +206,12 @@ func UcSaveByShareLink(link string, passcodeOverride string) (UcTransferResult, 
 		}
 	}
 	out := UcTransferResult{ShareCode: shareCode, Title: strings.TrimSpace(title), Message: msg, Raw: saveResp}
+	if picked := ucproPickFidsFromSaveResp(saveResp); len(picked) > 0 {
+		if len(picked) > len(fids) {
+			picked = picked[:len(fids)]
+		}
+		out.SavedFids = append([]string{}, picked...)
+	}
 	if cfg.ReplaceLinkAfterTransfer {
 		// 全程 pc-api.uc.cn，与 ucproProductParam(UCBrowser) 一致
 		u, err := ucproReplaceWithOwnShareLink(client, ucAPIBase, cookie, folderID, "drive.uc.cn", "UC网盘", len(fids), saveResp, "")
@@ -217,6 +224,46 @@ func UcSaveByShareLink(link string, passcodeOverride string) (UcTransferResult, 
 		}
 	}
 	return out, nil
+}
+
+// DeleteUcFilesByFids 删除 UC 网盘中已转存的文件/目录（fid 列表）。
+func DeleteUcFilesByFids(fidList []string) error {
+	cfg, err := LoadNetdiskCredentials()
+	if err != nil {
+		return err
+	}
+	picked := PickUCCookie(cfg)
+	cookie := strings.TrimSpace(picked.Cookie)
+	if cookie == "" {
+		return fmt.Errorf("UC Cookie 未配置")
+	}
+	uniq := make([]string, 0, len(fidList))
+	seen := map[string]struct{}{}
+	for _, fid := range fidList {
+		fid = strings.TrimSpace(fid)
+		if fid == "" {
+			continue
+		}
+		if _, ok := seen[fid]; ok {
+			continue
+		}
+		seen[fid] = struct{}{}
+		uniq = append(uniq, fid)
+	}
+	if len(uniq) == 0 {
+		return nil
+	}
+	client := &http.Client{Timeout: 25 * time.Second}
+	body, _ := json.Marshal(map[string]any{"action_type": 2, "filelist": uniq, "exclude_fids": []string{}})
+	u := ucAPIBase + "/1/clouddrive/file/delete?pr=UCBrowser&fr=pc"
+	resp, err := httpDoJSONUC(client, http.MethodPost, u, cookie, body, "UC网盘")
+	if err != nil {
+		return ucNetErr(err)
+	}
+	if st := ucHTTPStatus(resp); st != 0 && st != 200 {
+		return fmt.Errorf("UC 删除失败：%s", ucHTTPMessage(resp))
+	}
+	return nil
 }
 
 // ucNetErr 将常见网络错误转为可读中文。

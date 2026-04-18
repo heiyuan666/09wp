@@ -3,24 +3,50 @@ package service
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
-
 )
 
 var quarkSharePattern = regexp.MustCompile(`https?://pan\.quark\.cn/s/([a-zA-Z0-9]+)`)
 
+func quarkTransferDebugEnabled() bool {
+	v := strings.ToLower(strings.TrimSpace(os.Getenv("NETDISK_TRANSFER_DEBUG")))
+	return v == "1" || v == "true" || v == "yes" || v == "on"
+}
+
+func quarkDebugJSON(prefix string, v any) {
+	if !quarkTransferDebugEnabled() {
+		return
+	}
+	b, err := json.Marshal(v)
+	if err != nil {
+		log.Printf("[QUARK-TRANSFER] %s marshal_err=%v", prefix, err)
+		return
+	}
+	s := string(b)
+	if len(s) > 1200 {
+		s = s[:1200] + "...(trunc)"
+	}
+	log.Printf("[QUARK-TRANSFER] %s %s", prefix, s)
+}
+
 type QuarkTransferResult struct {
-	ShareCode   string `json:"share_code"`
-	Title       string `json:"title,omitempty"`
-	Message     string `json:"message"`
-	Raw         any    `json:"raw,omitempty"`
-	OwnShareURL string `json:"own_share_url,omitempty"`
+	ShareCode   string          `json:"share_code"`
+	Title       string          `json:"title,omitempty"`
+	Message     string          `json:"message"`
+	Raw         any             `json:"raw,omitempty"`
+	OwnShareURL string          `json:"own_share_url,omitempty"`
+	SavedFids   []string        `json:"saved_fids,omitempty"`
 	FilterLog   *QuarkFilterLog `json:"filter_log,omitempty"`
+	Status      string          `json:"status,omitempty"`            // success|pending|fallback
+	OwnSource   string          `json:"own_share_source,omitempty"`  // task|folder_new_fids|fallback
+	Reason      string          `json:"fallback_reason,omitempty"`   // when no own link
 }
 
 type quarkAdItem struct {
@@ -30,14 +56,14 @@ type quarkAdItem struct {
 }
 
 type QuarkFilterLog struct {
-	ScanStartTime string `json:"scan_start_time"`
-	ScanEndTime   string `json:"scan_end_time"`
-	Structure     []string `json:"structure"`
-	TotalFiles    int `json:"total_files"`
-	TotalFolders  int `json:"total_folders"`
+	ScanStartTime string           `json:"scan_start_time"`
+	ScanEndTime   string           `json:"scan_end_time"`
+	Structure     []string         `json:"structure"`
+	TotalFiles    int              `json:"total_files"`
+	TotalFolders  int              `json:"total_folders"`
 	AdFiles       []map[string]any `json:"ad_files"`
-	DeletedFids   []string `json:"deleted_fids"`
-	Result        string `json:"result"`
+	DeletedFids   []string         `json:"deleted_fids"`
+	Result        string           `json:"result"`
 }
 
 func ParseQuarkShare(link string) (shareCode string, passcode string, err error) {
@@ -72,6 +98,16 @@ func QuarkSaveByShareLink(link string, passcodeOverride string) (QuarkTransferRe
 		passcode = strings.TrimSpace(passcodeOverride)
 	}
 	folderID := effectiveQuarkUCFolderID(picked, cfg.QuarkTargetFolderID)
+	if quarkTransferDebugEnabled() {
+		log.Printf(
+			"[QUARK-TRANSFER] account=%q ad_filter_enabled=%v banned_keywords=%q target_folder=%q replace_link_after_transfer=%v",
+			strings.TrimSpace(picked.Name),
+			cfg.QuarkAdFilterEnabled,
+			strings.TrimSpace(cfg.QuarkBannedKeywords),
+			strings.TrimSpace(folderID),
+			cfg.ReplaceLinkAfterTransfer,
+		)
+	}
 
 	client := &http.Client{Timeout: 25 * time.Second}
 	baseURL := "https://drive-h.quark.cn"
@@ -87,6 +123,7 @@ func QuarkSaveByShareLink(link string, passcodeOverride string) (QuarkTransferRe
 	if err != nil {
 		return QuarkTransferResult{}, err
 	}
+	quarkDebugJSON("token_resp=", tokenResp)
 	stoken, _ := getString(tokenResp, "data", "stoken")
 	if stoken == "" {
 		return QuarkTransferResult{}, fmt.Errorf("获取 stoken 失败")
@@ -99,6 +136,7 @@ func QuarkSaveByShareLink(link string, passcodeOverride string) (QuarkTransferRe
 	if err != nil {
 		return QuarkTransferResult{}, err
 	}
+	quarkDebugJSON("detail_resp=", detailResp)
 	list, ok := getAny(detailResp, "data", "list").([]any)
 	if !ok || len(list) == 0 {
 		return QuarkTransferResult{}, fmt.Errorf("分享内容为空")
@@ -119,6 +157,19 @@ func QuarkSaveByShareLink(link string, passcodeOverride string) (QuarkTransferRe
 	}
 
 	// 3) save to configured folder
+	// 先记录目标目录已有 fid，后续兜底时优先取“本次新出现”的文件，避免误复用旧链接。
+	beforeSet := map[string]struct{}{}
+	if prev, err := ucproListRecentFidsInFolder(client, ucproShareBaseURL(baseURL), cookie, folderID, 200, "夸克"); err == nil {
+		for _, fid := range prev {
+			fid = strings.TrimSpace(fid)
+			if fid != "" {
+				beforeSet[fid] = struct{}{}
+			}
+		}
+		if quarkTransferDebugEnabled() {
+			log.Printf("[QUARK-TRANSFER] before_save_folder_snapshot folder=%s count=%d", strings.TrimSpace(folderID), len(beforeSet))
+		}
+	}
 	saveReq := map[string]any{
 		"fid_list":       fids,
 		"fid_token_list": tokens,
@@ -134,6 +185,7 @@ func QuarkSaveByShareLink(link string, passcodeOverride string) (QuarkTransferRe
 	if err != nil {
 		return QuarkTransferResult{}, err
 	}
+	quarkDebugJSON("save_resp=", saveResp)
 	msg, _ := saveResp["message"].(string)
 	if msg == "" {
 		msg = "转存请求已提交"
@@ -147,7 +199,19 @@ func QuarkSaveByShareLink(link string, passcodeOverride string) (QuarkTransferRe
 	}
 
 	// 4) 可选：转存后递归广告过滤（后台可配置）
-	topFids := quarkPickSavedTopFids(client, baseURL, cookie, folderID, len(fids), saveResp)
+	wantTopFids := len(fids)
+	if wantTopFids < 20 {
+		wantTopFids = 20
+	}
+	if wantTopFids > 200 {
+		wantTopFids = 200
+	}
+	pickStart := time.Now()
+	topFids, topFidSource := quarkPickSavedTopFids(client, baseURL, cookie, folderID, wantTopFids, saveResp, beforeSet)
+	pollElapsedMs := time.Since(pickStart).Milliseconds()
+	if quarkTransferDebugEnabled() {
+		log.Printf("[QUARK-TRANSFER] pick_saved_top_fids got=%d source=%s poll_elapsed_ms=%d values=%v", len(topFids), topFidSource, pollElapsedMs, topFids)
+	}
 	filteredTopFids := topFids
 	var filterLog *QuarkFilterLog
 	words := parseCommaKeywords(cfg.QuarkBannedKeywords)
@@ -164,19 +228,82 @@ func QuarkSaveByShareLink(link string, passcodeOverride string) (QuarkTransferRe
 		}
 	}
 	if len(filteredTopFids) == 0 {
-		return QuarkTransferResult{}, fmt.Errorf("资源内容为空（全部被广告词过滤）")
+		if quarkTransferDebugEnabled() {
+			log.Printf(
+				"[QUARK-TRANSFER] filtered all files: top_fids=%d keywords=%q",
+				len(topFids),
+				strings.TrimSpace(cfg.QuarkBannedKeywords),
+			)
+		}
+		reason := "top_fids_empty"
+		if topFidSource != "" {
+			reason = topFidSource + "_empty"
+		}
+		if cfg.QuarkAdFilterEnabled && len(words) > 0 {
+			return QuarkTransferResult{}, fmt.Errorf("资源内容为空（全部被广告词过滤）")
+		}
+		if cfg.ReplaceLinkAfterTransfer {
+			return QuarkTransferResult{
+				ShareCode: shareCode,
+				Title:     strings.TrimSpace(title),
+				Message:   "转存已提交，但未在目标目录定位到文件（无法生成本人分享链接），请稍后重试",
+				Raw:       saveResp,
+				Status:    "pending",
+				OwnSource: "fallback",
+				Reason:    reason,
+			}, nil
+		}
+		return QuarkTransferResult{
+			ShareCode: shareCode,
+			Title:     strings.TrimSpace(title),
+			Message:   "转存已提交，但未在目标目录定位到文件",
+			Raw:       saveResp,
+			Status:    "pending",
+			OwnSource: "fallback",
+			Reason:    reason,
+		}, nil
 	}
 
-	out := QuarkTransferResult{ShareCode: shareCode, Title: strings.TrimSpace(title), Message: msg, Raw: saveResp, FilterLog: filterLog}
+	out := QuarkTransferResult{
+		ShareCode: shareCode, Title: strings.TrimSpace(title), Message: msg, Raw: saveResp, FilterLog: filterLog,
+		SavedFids: append([]string{}, filteredTopFids...),
+		Status:    "success",
+		OwnSource: topFidSource,
+	}
 	if cfg.ReplaceLinkAfterTransfer {
 		u, err := quarkCreateOwnShareLinkByFids(client, ucproShareBaseURL(baseURL), cookie, filteredTopFids, "pan.quark.cn")
 		if err != nil {
+			if quarkTransferDebugEnabled() {
+				log.Printf("[QUARK-TRANSFER] own_share_failed err=%v", err)
+			}
 			out.Message = msg + "（未生成本人分享链接：" + trimTo255(err.Error()) + "）"
+			out.Status = "fallback"
+			out.OwnSource = "fallback"
+			out.Reason = "create_own_share_failed"
 		} else {
+			if quarkTransferDebugEnabled() {
+				log.Printf("[QUARK-TRANSFER] own_share_success url=%s", strings.TrimSpace(u))
+			}
 			out.OwnShareURL = u
 		}
 	}
 	return out, nil
+}
+
+// DeleteQuarkFilesByFids 删除夸克网盘中已转存的文件/目录（fid 列表）。
+func DeleteQuarkFilesByFids(fidList []string) error {
+	cfg, err := LoadNetdiskCredentials()
+	if err != nil {
+		return err
+	}
+	picked := PickQuarkCookie(cfg)
+	cookie := strings.TrimSpace(picked.Cookie)
+	if cookie == "" {
+		return fmt.Errorf("夸克 Cookie 未配置")
+	}
+	client := &http.Client{Timeout: 25 * time.Second}
+	baseURL := "https://drive-h.quark.cn"
+	return quarkDeleteByFids(client, ucproShareBaseURL(baseURL), cookie, fidList)
 }
 
 // quarkCreateOwnShareLinkByFids 夸克：用 fid_list 创建分享任务并返回分享链接
@@ -215,19 +342,97 @@ func parseCommaKeywords(s string) []string {
 	return out
 }
 
-func quarkPickSavedTopFids(client *http.Client, baseURL, cookie, folderID string, want int, saveResp map[string]any) []string {
+func quarkPickSavedTopFids(client *http.Client, baseURL, cookie, folderID string, want int, saveResp map[string]any, beforeSet map[string]struct{}) ([]string, string) {
 	if taskID := ucproPickTaskIDFromSaveResp(saveResp); taskID != "" {
+		if quarkTransferDebugEnabled() {
+			log.Printf("[QUARK-TRANSFER] pick_saved_top_fids task_id=%s want=%d", taskID, want)
+		}
 		if fids, err := ucproQueryTaskTopFids(client, ucproShareBaseURL(baseURL), cookie, taskID, want, "夸克"); err == nil && len(fids) > 0 {
-			return fids
+			if quarkTransferDebugEnabled() {
+				log.Printf("[QUARK-TRANSFER] task_top_fids_ok count=%d values=%v", len(fids), fids)
+			}
+			return fids, "task"
+		} else if quarkTransferDebugEnabled() {
+			log.Printf("[QUARK-TRANSFER] task_top_fids_fail err=%v", err)
 		}
 	}
-	if fids, err := ucproListRecentFidsInFolder(client, ucproShareBaseURL(baseURL), cookie, folderID, want*2, "夸克"); err == nil && len(fids) > 0 {
+	listLimit := want * 2
+	if listLimit < 50 {
+		listLimit = 50
+	}
+	if listLimit > 200 {
+		listLimit = 200
+	}
+	if fids, err := ucproListRecentFidsInFolder(client, ucproShareBaseURL(baseURL), cookie, folderID, listLimit, "夸克"); err == nil && len(fids) > 0 {
+		// 优先取本次转存后新增的 fid，减少“总是同一个旧链接”的概率。
+		if len(beforeSet) > 0 {
+			newFids := make([]string, 0, len(fids))
+			for _, fid := range fids {
+				fid = strings.TrimSpace(fid)
+				if fid == "" {
+					continue
+				}
+				if _, existed := beforeSet[fid]; !existed {
+					newFids = append(newFids, fid)
+				}
+			}
+			if len(newFids) > 0 {
+				if quarkTransferDebugEnabled() {
+					log.Printf(
+						"[QUARK-TRANSFER] list_recent_new_fids_ok folder=%s count=%d values=%v",
+						strings.TrimSpace(folderID),
+						len(newFids),
+						newFids,
+					)
+				}
+				if len(newFids) > want {
+					return newFids[:want], "folder_new_fids"
+				}
+				return newFids, "folder_new_fids"
+			}
+			// 当前目录只有旧 fid（未出现新增），说明本次转存结果尚未可见。
+			// 这里不要回退到旧 fid，否则会反复生成同一个本人分享链接。
+			if quarkTransferDebugEnabled() {
+				log.Printf("[QUARK-TRANSFER] list_recent_only_old_fids folder=%s old_count=%d after_count=%d new_count=0", strings.TrimSpace(folderID), len(beforeSet), len(fids))
+			}
+			// 二次确认窗口：夸克转存偶发延迟写入，延迟后再查一次差集。
+			time.Sleep(6 * time.Second)
+			if refids, rerr := ucproListRecentFidsInFolder(client, ucproShareBaseURL(baseURL), cookie, folderID, listLimit, "夸克"); rerr == nil {
+				reNewFids := make([]string, 0, len(refids))
+				for _, fid := range refids {
+					fid = strings.TrimSpace(fid)
+					if fid == "" {
+						continue
+					}
+					if _, existed := beforeSet[fid]; !existed {
+						reNewFids = append(reNewFids, fid)
+					}
+				}
+				if quarkTransferDebugEnabled() {
+					log.Printf("[QUARK-TRANSFER] second_window_check folder=%s after_count=%d new_count=%d", strings.TrimSpace(folderID), len(refids), len(reNewFids))
+				}
+				if len(reNewFids) > 0 {
+					if len(reNewFids) > want {
+						return reNewFids[:want], "folder_new_fids"
+					}
+					return reNewFids, "folder_new_fids"
+				}
+			} else if quarkTransferDebugEnabled() {
+				log.Printf("[QUARK-TRANSFER] second_window_check_fail folder=%s err=%v", strings.TrimSpace(folderID), rerr)
+			}
+			return nil, "folder_old_only"
+		}
+		if quarkTransferDebugEnabled() {
+			log.Printf("[QUARK-TRANSFER] list_recent_fids_ok folder=%s count=%d values=%v", strings.TrimSpace(folderID), len(fids), fids)
+		}
 		if len(fids) > want {
-			return fids[:want]
+			return fids[:want], "folder_recent"
 		}
-		return fids
+		return fids, "folder_recent"
+	} else if quarkTransferDebugEnabled() {
+		log.Printf("[QUARK-TRANSFER] list_recent_fids_fail folder=%s err=%v", strings.TrimSpace(folderID), err)
 	}
-	return nil
+	return nil, "none"
 }
 
 func quarkFilterAdFids(client *http.Client, baseURL, cookie string, topFids []string, words []string) ([]string, *QuarkFilterLog, error) {

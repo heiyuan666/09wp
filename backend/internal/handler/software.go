@@ -14,6 +14,7 @@ import (
 
 	"dfan-netdisk-backend/internal/database"
 	"dfan-netdisk-backend/internal/model"
+	"dfan-netdisk-backend/pkg/netdiskurl"
 	"dfan-netdisk-backend/pkg/response"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -34,6 +35,32 @@ func normalizeSoftwareURLs(in []string) []string {
 		out = append(out, v)
 	}
 	return out
+}
+
+func jsonStringListToStrings(j model.JSONStringList) []string {
+	if j == nil {
+		return nil
+	}
+	return []string(j)
+}
+
+// publicNormalizeSoftware 直链中的网盘 URL 归入网盘列表；详情接口可从简介中再提取网盘链接。
+func publicNormalizeSoftware(s *model.Software, extractSummary bool) {
+	d, p := netdiskurl.NormalizeSlices(jsonStringListToStrings(s.DownloadDirect), jsonStringListToStrings(s.DownloadPan))
+	if extractSummary {
+		p = netdiskurl.MergeUnique(p, netdiskurl.ExtractFromText(s.Summary))
+	}
+	s.DownloadDirect = model.JSONStringList(d)
+	s.DownloadPan = model.JSONStringList(p)
+}
+
+func publicNormalizeSoftwareVersion(v *model.SoftwareVersion, extractNotes bool) {
+	d, p := netdiskurl.NormalizeSlices(jsonStringListToStrings(v.DownloadDirect), jsonStringListToStrings(v.DownloadPan))
+	if extractNotes {
+		p = netdiskurl.MergeUnique(p, netdiskurl.ExtractFromText(v.ReleaseNotes))
+	}
+	v.DownloadDirect = model.JSONStringList(d)
+	v.DownloadPan = model.JSONStringList(p)
 }
 
 func parseSoftwareDate(v string) (*time.Time, error) {
@@ -122,17 +149,26 @@ func SoftwareUploadCover(c *gin.Context) {
 		return
 	}
 
+	kind := strings.ToLower(strings.TrimSpace(c.PostForm("kind")))
+	if kind == "" {
+		kind = "cover"
+	}
+	thumbMax := 320
+	if kind == "icon" {
+		thumbMax = 256
+	}
 	thumbName := base + "_thumb.jpg"
 	thumbPath := filepath.Join(dir, thumbName)
-	if err := createSoftwareThumb(savePath, thumbPath, 320); err != nil {
+	if err := createSoftwareThumb(savePath, thumbPath, thumbMax); err != nil {
 		response.Error(c, 500, "generate thumbnail failed")
 		return
 	}
 
 	response.OK(c, gin.H{
-		"url":        "/public/covers/software/" + fileName,
-		"thumb_url":  "/public/covers/software/" + thumbName,
+		"url":         "/public/covers/software/" + fileName,
+		"thumb_url":   "/public/covers/software/" + thumbName,
 		"preview_url": "/public/covers/software/" + fileName,
+		"kind":        kind,
 	})
 }
 
@@ -266,6 +302,8 @@ func SoftwareCreate(c *gin.Context) {
 		Version           string   `json:"version"`
 		Cover             string   `json:"cover"`
 		CoverThumb        string   `json:"cover_thumb"`
+		Icon              string   `json:"icon"`
+		IconThumb         string   `json:"icon_thumb"`
 		Screenshots       []string `json:"screenshots"`
 		Size              string   `json:"size"`
 		Platforms         []string `json:"platforms"`
@@ -299,6 +337,8 @@ func SoftwareCreate(c *gin.Context) {
 		Version:           strings.TrimSpace(req.Version),
 		Cover:             strings.TrimSpace(req.Cover),
 		CoverThumb:        strings.TrimSpace(req.CoverThumb),
+		Icon:              strings.TrimSpace(req.Icon),
+		IconThumb:         strings.TrimSpace(req.IconThumb),
 		Screenshots:       model.NormalizeExtraShareLinks(normalizeSoftwareURLs(req.Screenshots)),
 		Size:              strings.TrimSpace(req.Size),
 		Platforms:         strings.Join(normalizeSoftwareURLs(req.Platforms), ","),
@@ -335,8 +375,10 @@ func SoftwareUpdate(c *gin.Context) {
 		Summary           string   `json:"summary"`
 		CategoryID        *uint64  `json:"category_id"`
 		Version           string   `json:"version"`
-		Cover             string   `json:"cover"`
-		CoverThumb        string   `json:"cover_thumb"`
+		Cover             *string  `json:"cover"`
+		CoverThumb        *string  `json:"cover_thumb"`
+		Icon              *string  `json:"icon"`
+		IconThumb         *string  `json:"icon_thumb"`
 		Screenshots       []string `json:"screenshots"`
 		Size              string   `json:"size"`
 		Platforms         []string `json:"platforms"`
@@ -365,11 +407,17 @@ func SoftwareUpdate(c *gin.Context) {
 	if req.Version != "" {
 		updates["version"] = strings.TrimSpace(req.Version)
 	}
-	if req.Cover != "" {
-		updates["cover"] = strings.TrimSpace(req.Cover)
+	if req.Cover != nil {
+		updates["cover"] = strings.TrimSpace(*req.Cover)
 	}
-	if req.CoverThumb != "" {
-		updates["cover_thumb"] = strings.TrimSpace(req.CoverThumb)
+	if req.CoverThumb != nil {
+		updates["cover_thumb"] = strings.TrimSpace(*req.CoverThumb)
+	}
+	if req.Icon != nil {
+		updates["icon"] = strings.TrimSpace(*req.Icon)
+	}
+	if req.IconThumb != nil {
+		updates["icon_thumb"] = strings.TrimSpace(*req.IconThumb)
 	}
 	if req.Screenshots != nil {
 		updates["screenshots"] = model.NormalizeExtraShareLinks(normalizeSoftwareURLs(req.Screenshots))
@@ -667,6 +715,9 @@ func PublicSoftwareList(c *gin.Context) {
 		response.Error(c, 500, "查询失败")
 		return
 	}
+	for i := range list {
+		publicNormalizeSoftware(&list[i], false)
+	}
 	response.OKPage(c, list, total)
 }
 
@@ -687,6 +738,10 @@ func PublicSoftwareDetail(c *gin.Context) {
 	}
 	var versions []model.SoftwareVersion
 	_ = database.DB().Where("software_id = ?", id).Order("published_at DESC, id DESC").Find(&versions).Error
+	publicNormalizeSoftware(&item, true)
+	for i := range versions {
+		publicNormalizeSoftwareVersion(&versions[i], true)
+	}
 	response.OK(c, gin.H{
 		"software": item,
 		"versions": versions,

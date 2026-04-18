@@ -28,9 +28,14 @@ coverage
 
 .eslintcache
 
+# 本地打包输出（pnpm pack:linux）
+release/
+
 # Backend build / local exports
+backend/dfan-netdisk-server
 backend/cmd/server/*.exe
 backend/storage/exports/
+backend/storage/covers/software/*
 backend/dfan-netdisk-backend-server-*
 
 # Local env (勿提交密钥)
@@ -45,3 +50,9 @@ backend/dfan-netdisk-backend-server-*
 __screenshots__/
 auto-imports.d.ts
 components.d.ts
+
+# soft 子项目 Nuxt 构建缓存
+soft/.nuxt/
+
+# 本地备份副本
+index-副本.php

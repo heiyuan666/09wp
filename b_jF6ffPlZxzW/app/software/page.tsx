@@ -30,7 +30,13 @@ export default async function SoftwarePage() {
               >
                 <div className="flex gap-3">
                   <img
-                    src={item.cover_thumb || item.cover || "/placeholder.svg"}
+                    src={
+                      item.icon_thumb ||
+                      item.icon ||
+                      item.cover_thumb ||
+                      item.cover ||
+                      "/placeholder.svg"
+                    }
                     alt={item.name}
                     className="h-16 w-16 rounded object-cover bg-muted"
                   />

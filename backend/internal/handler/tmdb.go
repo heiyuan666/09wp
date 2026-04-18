@@ -34,7 +34,7 @@ type tmdbItem struct {
 }
 
 type tmdbSearchCachePayload struct {
-	Enabled bool          `json:"enabled"`
+	Enabled bool           `json:"enabled"`
 	Item    map[string]any `json:"item"`
 }
 
@@ -120,6 +120,10 @@ func PublicTMDBSearch(c *gin.Context) {
 	cacheTTL := time.Duration(0)
 	var cfg model.SystemConfig
 	if err := database.DB().Order("id ASC").First(&cfg).Error; err == nil {
+		if !cfg.TMDBEnabled {
+			response.OK(c, gin.H{"enabled": false, "item": nil})
+			return
+		}
 		token = strings.TrimSpace(cfg.TMDBBearerToken)
 		proxyURL = strings.TrimSpace(cfg.TMDBProxyURL)
 		if cfg.TMDBSearchCacheTTL > 0 {
@@ -236,4 +240,3 @@ func PublicTMDBSearch(c *gin.Context) {
 	}
 	response.OK(c, payload)
 }
-

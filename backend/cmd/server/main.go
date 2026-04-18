@@ -76,12 +76,18 @@ func main() {
 	if err := database.SeedGameSiteConfig(); err != nil {
 		log.Printf("seed game site config failed: %v", err)
 	}
+	if err := database.SeedSoftwareSiteConfig(); err != nil {
+		log.Printf("seed software site config failed: %v", err)
+	}
 
 	if err := database.SeedNetdiskCredential(); err != nil {
 		log.Printf("seed netdisk credential failed: %v", err)
 	}
 	if err := database.SeedGameCategories(); err != nil {
 		log.Printf("seed game categories failed: %v", err)
+	}
+	if err := database.SeedSoftwareCategories(); err != nil {
+		log.Printf("seed software categories failed: %v", err)
 	}
 
 	// 初始化 Gin 路由
@@ -97,6 +103,8 @@ func main() {
 	service.StartTelegramSyncWorker()
 	service.StartTelegramAutoTransferWorker()
 	service.StartResourceCheckWorker()
+	service.StartGlobalSearchCleanupWorker()
+	service.StartQuarkFolderCleanupWorker()
 	service.StartHaokaSyncWorker()
 	service.StartRSSSyncWorker()
 
