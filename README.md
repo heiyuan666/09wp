@@ -29,6 +29,17 @@
 - **MySQL**：`5.7+` / `8.x`，字符集建议 `utf8mb4`
 
 可选：**Redis**（搜索缓存等）、**Meilisearch**（加速搜索）。
+##演示：
+<img width="1794" height="1033" alt="image" src="https://github.com/user-attachments/assets/22827df3-7426-48ee-94fa-0b267e8f370a" />
+<img width="1794" height="1245" alt="image" src="https://github.com/user-attachments/assets/d872f8ae-007c-4e0f-85b9-21010dbfa974" />
+<img width="1794" height="900" alt="image" src="https://github.com/user-attachments/assets/67f94f78-2ce7-4e41-b0c6-5c41d33ed226" />
+<img width="1794" height="900" alt="image" src="https://github.com/user-attachments/assets/eb89a106-f072-40ab-a064-df756f13231b" />
+<img width="1794" height="1625" alt="image" src="https://github.com/user-attachments/assets/b30a19fd-b638-43c1-bb65-0da017722c23" />
+
+
+
+
+
 
 ## 快速开始
 
